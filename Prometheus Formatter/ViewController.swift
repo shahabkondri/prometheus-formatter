@@ -2,7 +2,7 @@ import Cocoa
 import SafariServices
 import WebKit
 
-let extensionBundleIdentifier = "com.shahabkondri.prometheusformatter.extension"
+let extensionBundleIdentifier = "com.shahabkondri.Prometheus-Formatter.Extension"
 
 class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
