@@ -1,0 +1,29 @@
+{
+  "name": "Prometheus Formatter",
+  "description": "Highlights Prometheus metrics for better readability.",
+  "version": "1.0",
+  "manifest_version": 3,
+  
+  "permissions": ["storage", "activeTab"],
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["prometheus-formatter.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["images/sun.png", "images/moon.png", "images/filter.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "48": "images/prometheus-formatter-48.png",
+    "96": "images/prometheus-formatter-96.png",
+    "128": "images/prometheus-formatter-128.png",
+    "256": "images/prometheus-formatter-256.png",
+    "512": "images/prometheus-formatter-512.png"
+  }
+}

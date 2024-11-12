@@ -1,0 +1,10 @@
+{
+    "extension_name": {
+        "message": "Prometheus Formatter Extension",
+        "description": "Highlights Prometheus metrics for better readability."
+    },
+    "extension_description": {
+        "message": "Enhances the readability of Prometheus metrics by applying syntax highlighting and formatting, making it easier to analyze and monitor your data.",
+        "description": "Detailed description of what the Prometheus Formatter Extension does."
+    }
+}
