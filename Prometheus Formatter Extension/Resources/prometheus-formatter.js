@@ -444,6 +444,14 @@
 
 	   const bodyText = document.body.textContent.trim();
 	   if (!bodyText) return;
+       
+       const MAX_SIZE_BYTES = 32 * 1024 * 1024; // 32 MB
+       const contentSize = new Blob([bodyText]).size;
+       
+       if (contentSize > MAX_SIZE_BYTES) {
+           console.warn('Content size exceeds 32 MB. Skipping processing.');
+           return;
+       }
 
 	   document.body.innerHTML = '';
 
