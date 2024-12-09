@@ -2,3 +2,10 @@
 *.xcuserstate
 project.xcworkspace/
 xcuserdata/
+
+.idea
+*.iws
+*.iml
+*.ipr
+
+.vscode/
