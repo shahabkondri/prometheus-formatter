@@ -5,12 +5,42 @@
      return;
    }
 
-   const COMMENT_REGEX = /^#\s+(HELP|TYPE)\s+(.*)/;
+   const root = typeof globalThis !== 'undefined' ? globalThis : window;
+   const parser = root.PrometheusFormatterParser;
+   if (!parser) {
+     console.error('Prometheus parser is not available');
+     return;
+   }
 
-   // Metric name must start with [a-zA-Z_:]
-   // Value must be a valid Prometheus value (number, +Inf, -Inf, NaN)
-   const METRIC_REGEX = /^([a-zA-Z_:][\w_:]*)(?:\{(.*)\})?\s+([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?|NaN|Inf|\+Inf|\-Inf)$/;
-   const LABEL_REGEX = /([\w_]+)="(.*?)"/g;
+   const { parsePrometheusLine, classifyPrometheusLine } = parser;
+
+   const escapeHtml = (value) => {
+     return String(value).replace(/[&<>"']/g, (match) => {
+       switch (match) {
+         case '&':
+           return '&amp;';
+         case '<':
+           return '&lt;';
+         case '>':
+           return '&gt;';
+         case '"':
+           return '&quot;';
+         case '\'':
+           return '&#39;';
+         default:
+           return match;
+       }
+     });
+   };
+
+   const formatLabelValue = (value) => {
+     return String(value)
+       .replace(/\\/g, '\\\\')
+       .replace(/\n/g, '\\n')
+       .replace(/\r/g, '\\r')
+       .replace(/\t/g, '\\t')
+       .replace(/"/g, '\\"');
+   };
 
    const prometheusFormatterCSS = `
    /* ====================================== */
@@ -26,6 +56,9 @@
      --pf-label-value-color: #486830;
      --pf-value-color: #1E5C84;
      --pf-comment-color: #A0A0A0;
+     --pf-warning-bg: #FFF4E5;
+     --pf-warning-fg: #7A4B00;
+     --pf-warning-border: #F0C36D;
    }
 
    :root[data-theme='dark'] {
@@ -36,6 +69,9 @@
      --pf-label-value-color: #6AAB73;
      --pf-value-color: #CF8E6D;
      --pf-comment-color: #7A7E85;
+     --pf-warning-bg: #3B2C1A;
+     --pf-warning-fg: #F5D6A1;
+     --pf-warning-border: #B8812C;
    }
 
    html, body {
@@ -158,112 +194,179 @@
      font-style: italic;
      margin: 0 0 0.5em 0;
    }
+
+   .pf-timestamp,
+   .pf-exemplar,
+   .pf-exemplar-timestamp {
+     color: var(--pf-comment-color);
+   }
+
+   .pf-exemplar-value {
+     color: var(--pf-value-color);
+   }
+
+   .pf-warning {
+     background-color: var(--pf-warning-bg);
+     color: var(--pf-warning-fg);
+     border-left: 3px solid var(--pf-warning-border);
+     padding: 0.5em 0.75em;
+     margin: 0 0 0.5em 0;
+     font-size: 0.95em;
+     white-space: pre-wrap;
+   }
+
+   .pf-warning-title {
+     font-weight: bold;
+   }
+
+   .pf-warning-raw {
+     color: var(--pf-fg);
+     margin-top: 0.25em;
+     word-break: break-word;
+   }
    `;
 
-   class PrometheusMetricsHandler {
-     constructor() {
-       this.entries = [];
-     }
+  class PrometheusMetricsHandler {
+    constructor() {
+      this.entries = [];
+    }
 
-     /**
-      * Parse a line of text and add a Metric or Comment to entries.
-      * @param {string} line - The line to parse.
-      */
-     parseAndAddEntry(line) {
-       // Try to parse as comment
-       const commentMatch = line.match(COMMENT_REGEX);
-       if (commentMatch) {
-         const [, type, text] = commentMatch;
-         this.entries.push({
-           type: 'comment',
-           commentType: type,
-           text: text,
-           getHtml: () => `<div class="pf-comment"># ${type} ${text}</div>`,
-         });
-         return;
-       }
+    createEntry(parsed) {
+      if (parsed.type === 'comment') {
+        const raw = parsed.raw || '';
+        return {
+          ...parsed,
+          getHtml: () => `<div class="pf-comment">${escapeHtml(raw)}</div>`,
+        };
+      }
 
-       // Try to parse as metric
-       const metricMatch = line.match(METRIC_REGEX);
-       if (metricMatch) {
-         const [, metricName, labelsString, value] = metricMatch;
-         const labels = this.parseLabels(labelsString);
-         this.entries.push({
-           type: 'metric',
-           name: metricName,
-           labels: labels,
-           value: value,
-           getHtml: () => {
-             const labelParts = Object.entries(labels).map(([key, value]) => {
-               return `<span class="pf-label-key">${key}</span>="<span class="pf-label-value">${value}</span>"`;
-             });
-             const formattedLabels = labelParts.length > 0 ? `<span class="pf-labels">{${labelParts.join(', ')}}</span>` : '';
-             return `<div class="pf-section"><span class="pf-metric-name">${metricName}</span>${formattedLabels} <span class="pf-value">${value}</span></div>`;
-           },
-         });
-         return;
-       }
-       // If the line doesn't match, ignore it
-     }
+      if (parsed.type === 'warning') {
+        const lineLabel = parsed.lineNumber ? `line ${parsed.lineNumber}` : 'unknown line';
+        const safeMessage = escapeHtml(parsed.message || 'Unknown parse warning');
+        const safeRaw = escapeHtml(parsed.raw || '');
+        return {
+          ...parsed,
+          getHtml: () =>
+            `<div class="pf-warning"><div class="pf-warning-title">Parse warning (${lineLabel}):</div><div>${safeMessage}</div><div class="pf-warning-raw">${safeRaw}</div></div>`,
+        };
+      }
 
-     /**
-      * Parse the labels from a labels string.
-      * @param {string} labelsString - The labels string.
-      * @returns {Object} - Labels as key-value pairs.
-      */
-     parseLabels(labelsString) {
-       const labels = {};
-       if (!labelsString) return labels;
-       let match;
-       while ((match = LABEL_REGEX.exec(labelsString)) !== null) {
-         const [, key, value] = match;
-         labels[key] = value;
-       }
-       // Reset LABEL_REGEX lastIndex for next use
-       LABEL_REGEX.lastIndex = 0;
-       return labels;
-     }
+      if (parsed.type === 'metric') {
+        const formatLabels = (labels, showEmpty) => {
+          if (!labels || labels.length === 0) {
+            return showEmpty ? '<span class="pf-labels">{}</span>' : '';
+          }
+          const labelParts = labels.map(({ key, value }) => {
+            const safeKey = escapeHtml(key);
+            const safeValue = escapeHtml(formatLabelValue(value));
+            return `<span class="pf-label-key">${safeKey}</span>="<span class="pf-label-value">${safeValue}</span>"`;
+          });
+          return `<span class="pf-labels">{${labelParts.join(', ')}}</span>`;
+        };
 
-     /**
-      * Process an array of lines and populate entries.
-      * @param {string[]} lines - Lines to process.
-      */
-     processLines(lines) {
-       lines.forEach((line) => this.parseAndAddEntry(line));
-     }
+        const formatExemplar = (exemplar) => {
+          if (!exemplar) return '';
+          const labels = formatLabels(exemplar.labels, true);
+          const exemplarValue = escapeHtml(exemplar.value);
+          const exemplarTimestamp = exemplar.timestamp
+            ? ` <span class="pf-exemplar-timestamp">${escapeHtml(exemplar.timestamp)}</span>`
+            : '';
+          return `${labels} <span class="pf-exemplar-value">${exemplarValue}</span>${exemplarTimestamp}`;
+        };
 
-     /**
-      * Filter entries based on a search query.
-      * @param {string} query - The search query.
-      * @returns {Array} - Filtered array of entries.
-      */
-     filterEntries(query) {
-       if (!query) return this.entries;
-       const lowerQuery = query.toLowerCase();
-       return this.entries.filter(({
-         type,
-         name,
-         labels,
-         text,
-         value
-       }) => {
-         return type === 'comment' ? text.toLowerCase().includes(lowerQuery) :
-           (name.toLowerCase().includes(lowerQuery) ||
-             Object.entries(labels).some(([key, val]) => key.toLowerCase().includes(lowerQuery) || val.toLowerCase().includes(lowerQuery)) ||
-             value.toLowerCase().includes(lowerQuery));
-       });
-     }
+        const safeName = escapeHtml(parsed.name);
+        const labelsHtml = formatLabels(parsed.labels, false);
+        const safeValue = escapeHtml(parsed.value);
+        const timestampHtml = parsed.timestamp
+          ? ` <span class="pf-timestamp">${escapeHtml(parsed.timestamp)}</span>`
+          : '';
+        const exemplarHtml = parsed.exemplar
+          ? ` <span class="pf-exemplar"># ${formatExemplar(parsed.exemplar)}</span>`
+          : '';
 
-     /**
-      * Render entries into HTML and insert into the page.
-      * @param {Array} entries - Array of entries to render.
-      */
-     renderEntries(entries) {
-       const html = entries.map((item) => item.getHtml()).join('\n');
-       const container = document.getElementById('pf-metrics-container');
-       container.innerHTML = html;
-     }
-   }
+        return {
+          ...parsed,
+          getHtml: () =>
+            `<div class="pf-section"><span class="pf-metric-name">${safeName}</span>${labelsHtml} <span class="pf-value">${safeValue}</span>${timestampHtml}${exemplarHtml}</div>`,
+        };
+      }
+
+      return null;
+    }
+
+    parseLine(line, lineNumber) {
+      const parsed = parsePrometheusLine(line, lineNumber);
+      if (!parsed) {
+        return null;
+      }
+      return this.createEntry(parsed);
+    }
+
+    /**
+     * Process an array of lines and populate entries.
+     * @param {string[]} lines - Lines to process.
+     */
+    processLines(lines) {
+      this.entries = [];
+      lines.forEach((line, index) => {
+        const entry = this.parseLine(line, index + 1);
+        if (entry) {
+          this.entries.push(entry);
+        }
+      });
+    }
+
+    /**
+     * Filter entries based on a search query.
+     * @param {string} query - The search query.
+     * @returns {Array} - Filtered array of entries.
+     */
+    filterEntries(query) {
+      if (!query) return this.entries;
+      const lowerQuery = query.toLowerCase();
+      return this.entries.filter((entry) => {
+        if (entry.type === 'comment') {
+          return (entry.raw || '').toLowerCase().includes(lowerQuery);
+        }
+        if (entry.type === 'warning') {
+          return (
+            (entry.message || '').toLowerCase().includes(lowerQuery) ||
+            (entry.raw || '').toLowerCase().includes(lowerQuery)
+          );
+        }
+        if (entry.type === 'metric') {
+          if (entry.name.toLowerCase().includes(lowerQuery)) return true;
+          if (entry.value.toLowerCase().includes(lowerQuery)) return true;
+          if (entry.timestamp && entry.timestamp.toLowerCase().includes(lowerQuery)) return true;
+          if (entry.labels.some(({ key, value }) => {
+            return key.toLowerCase().includes(lowerQuery) || value.toLowerCase().includes(lowerQuery);
+          })) {
+            return true;
+          }
+          if (entry.exemplar) {
+            if (entry.exemplar.value.toLowerCase().includes(lowerQuery)) return true;
+            if (entry.exemplar.timestamp && entry.exemplar.timestamp.toLowerCase().includes(lowerQuery)) return true;
+            if (entry.exemplar.labels.some(({ key, value }) => {
+              return key.toLowerCase().includes(lowerQuery) || value.toLowerCase().includes(lowerQuery);
+            })) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+    }
+
+    /**
+     * Render entries into HTML and insert into the page.
+     * @param {Array} entries - Array of entries to render.
+     */
+    renderEntries(entries) {
+      const html = entries.map((item) => item.getHtml()).join('\n');
+      const container = document.getElementById('pf-metrics-container');
+      container.innerHTML = html;
+    }
+  }
 
    class PrometheusUIManager {
 
@@ -392,45 +495,47 @@
     * Determines if the page contains Prometheus metrics.
     * @returns {boolean} - True if the page is a Prometheus metrics endpoint.
     */
-   const isValidEndpoint = () => {
-     const contentType = document.contentType;
-     if (contentType === 'application/openmetrics-text') {
-       return true;
-     }
+  const isValidEndpoint = () => {
+    const contentType = (document.contentType || '').toLowerCase();
+    if (contentType.includes('application/openmetrics-text')) {
+      return true;
+    }
 
-     if (contentType === 'text/plain') {
-       const bodyText = document.body.textContent.trim();
-       const lines = bodyText.split('\n');
-       let metricLines = 0;
-       let commentLines = 0;
-       let helpLines = 0;
-       let typeLines = 0;
+    if (contentType.startsWith('text/plain') || contentType === '') {
+      const bodyText = document.body.textContent.trim();
+      if (!bodyText) return false;
+      const lines = bodyText.split('\n');
+      let metricLines = 0;
+      let metadataLines = 0;
+      let inspected = 0;
+      const maxInspect = 200;
 
-       for (let line of lines) {
-         if (COMMENT_REGEX.test(line)) {
-           commentLines++;
-           metricLines++;
-           const commentMatch = line.match(COMMENT_REGEX);
-           if (commentMatch) {
-             const [, type] = commentMatch;
-             if (type === 'HELP') helpLines++;
-             if (type === 'TYPE') typeLines++;
-           }
-         } else if (METRIC_REGEX.test(line)) {
-           metricLines++;
-         }
-       }
+      for (const rawLine of lines) {
+        const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+        if (!line.trim()) continue;
+        inspected += 1;
+        const classification = classifyPrometheusLine(line);
+        if (classification?.type === 'metric') {
+          metricLines += 1;
+        } else if (classification?.type === 'comment') {
+          if (classification.commentType !== 'COMMENT') {
+            metadataLines += 1;
+          }
+        }
+        if (inspected >= maxInspect) {
+          break;
+        }
+      }
 
-       // More than 50% of lines are metric lines
-       // At least one HELP and one TYPE comment present
-       const isMetricDense = lines.length > 0 && (metricLines / lines.length) > 0.5;
-       const hasHelpAndType = helpLines > 0 && typeLines > 0;
+      if (metricLines === 0) return false;
+      const metricRatio = metricLines / Math.max(1, inspected);
+      const hasMetadata = metadataLines > 0;
+      const isMetricDense = metricRatio > 0.5 && metricLines >= 3;
+      return hasMetadata || isMetricDense;
+    }
 
-       return isMetricDense && hasHelpAndType;
-     }
-
-     return false;
-   };
+    return false;
+  };
 
    const processPage = () => {
      if (!isValidEndpoint()) return;

@@ -1,7 +1,7 @@
 {
   "name": "Prometheus Formatter",
   "description": "Highlights Prometheus metrics for better readability.",
-  "version": "1.1",
+  "version": "2.0",
   "manifest_version": 3,
   "default_locale": "en",
   
@@ -10,7 +10,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["prometheus-formatter.js"],
+      "js": ["prometheus-parser.js", "prometheus-formatter.js"],
       "run_at": "document_end"
     }
   ],
