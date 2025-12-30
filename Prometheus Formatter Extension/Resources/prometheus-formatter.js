@@ -584,7 +584,7 @@
    .pf-family-header {
      display: flex;
      gap: 0.35em;
-     padding: 0.26em 0.5em;
+     padding: 0.18em 0.4em;
      cursor: pointer;
      background-color: var(--pf-family-header-bg);
      border-radius: 10px;
@@ -608,7 +608,7 @@
      display: flex;
      align-items: flex-start;
      justify-content: center;
-     padding-top: 0.05em;
+     padding-top: 0;
    }
 
    .pf-family-toggle svg {
@@ -629,22 +629,22 @@
    .pf-family-header-content {
      display: flex;
      flex-direction: column;
-     gap: 0.2em;
+     gap: 0.05em;
      min-width: 0;
    }
 
     .pf-family-title-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.35em;
+      gap: 0.2em;
       align-items: baseline;
-      padding: 0.2em 0.2em;
-      border-radius: 8px;
+      padding: 0.1em 0.1em;
+      border-radius: 5px;
       background-color: var(--pf-family-row-bg);
     }
 
    .pf-family-name {
-     font-size: 0.92em;
+     font-size: 0.88em;
      font-weight: bold;
      color: var(--pf-metric-name-color);
    }
@@ -664,12 +664,12 @@
    .pf-family-meta-row {
      display: flex;
      flex-wrap: nowrap;
-     gap: 0.4em;
-     font-size: 0.78em;
+     gap: 0.2em;
+     font-size: 0.74em;
      align-items: baseline;
      min-width: 0;
      color: var(--pf-fg);
-     padding: 0 0.2em 0.1em 0.2em;
+     padding: 0 0.1em 0.03em 0.1em;
    }
 
    .pf-family-help {
@@ -678,6 +678,8 @@
      white-space: nowrap;
      overflow: hidden;
      text-overflow: ellipsis;
+     font-size: 0.74em;
+     margin-left: 0.2em;
      color: var(--pf-family-help-color);
    }
 
@@ -1109,7 +1111,7 @@
       const typeLabel = family.type ? family.type : 'unknown';
       const helpText = family.help && family.help.trim() ? escapeHtml(family.help) : 'No HELP provided';
       const unitHtml = family.unit
-        ? `<span class="pf-family-unit">unit: ${escapeHtml(family.unit)}</span>`
+        ? `<div class="pf-family-meta-row"><span class="pf-family-unit">unit: ${escapeHtml(family.unit)}</span></div>`
         : '';
       const headerClass = options.headerMatch ? ' pf-family-header-hit' : '';
       const openAttr = options.open ? ' open' : '';
@@ -1124,11 +1126,9 @@
                 <span class="pf-family-name">${escapeHtml(family.name)}</span>
                 <span class="pf-family-pill pf-family-type">type: ${escapeHtml(typeLabel)}</span>
                 <span class="pf-family-pill pf-family-count">series: ${seriesCount}</span>
-              </div>
-              <div class="pf-family-meta-row">
-                ${unitHtml}
                 <span class="pf-family-help">${helpText}</span>
               </div>
+              ${unitHtml}
             </div>
           </summary>
           <div class="pf-family-body">
