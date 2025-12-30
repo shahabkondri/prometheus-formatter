@@ -75,6 +75,8 @@
      --pf-search-hit-border: #E8B65A;
      --pf-search-bg: #C4AA92;
      --pf-search-border: #9B7F69;
+     --pf-scrollbar-thumb: #B8A089;
+     --pf-scrollbar-track: #F6EFE8;
    }
 
    :root[data-theme='dark'] {
@@ -104,6 +106,8 @@
      --pf-search-hit-border: #B8812C;
      --pf-search-bg: #1F2227;
      --pf-search-border: #374151;
+     --pf-scrollbar-thumb: #4E545D;
+     --pf-scrollbar-track: #1F2227;
    }
 
    :root {
@@ -287,6 +291,27 @@
      height: 100%;
      overflow-y: auto;
      padding: 1em;
+     scrollbar-width: thin;
+     scrollbar-color: var(--pf-scrollbar-thumb) var(--pf-scrollbar-track);
+   }
+
+   #pf-metrics-container::-webkit-scrollbar {
+     width: 8px;
+   }
+
+   #pf-metrics-container::-webkit-scrollbar-track {
+     background: var(--pf-scrollbar-track);
+   }
+
+   #pf-metrics-container::-webkit-scrollbar-thumb {
+     background-color: var(--pf-scrollbar-thumb);
+     border-radius: 999px;
+     border: 2px solid var(--pf-scrollbar-track);
+     background-clip: content-box;
+   }
+
+   #pf-metrics-container::-webkit-scrollbar-corner {
+     background: var(--pf-scrollbar-track);
    }
 
    .pf-sidebar {
