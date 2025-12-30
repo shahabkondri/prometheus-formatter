@@ -283,7 +283,7 @@
      height: 20px;
    }
 
-   .pf-theme-controls {
+   .pf-top-controls {
      position: fixed;
      top: 0.5em;
      right: 1em;
@@ -292,6 +292,41 @@
      gap: 0.5em;
      z-index: 10002;
      pointer-events: auto;
+   }
+
+   .pf-theme-controls {
+     display: flex;
+     align-items: center;
+     gap: 0.5em;
+   }
+
+   .pf-view-controls {
+     display: flex;
+     align-items: center;
+     font-family: Menlo, Consolas, DejaVu Sans Mono, monospace;
+   }
+
+   .pf-view-toggle {
+     display: inline-flex;
+     border: 1px solid var(--pf-family-pill-border);
+     border-radius: 999px;
+     overflow: hidden;
+     background-color: var(--pf-family-pill-bg);
+   }
+
+   .pf-toggle-button {
+     border: none;
+     background: none;
+     padding: 0.25em 0.7em;
+     font-size: 0.78em;
+     font-weight: 600;
+     color: var(--pf-family-pill-fg);
+     cursor: pointer;
+   }
+
+   .pf-toggle-button.active {
+     background-color: var(--pf-search-hit-bg);
+     color: var(--pf-fg);
    }
 
    .pf-content {
@@ -323,7 +358,8 @@
      justify-content: center;
    }
 
-   #pf-metrics-container {
+   #pf-metrics-container,
+   #pf-flat-container {
      flex: 1;
      min-width: 0;
      min-height: 0;
@@ -333,22 +369,43 @@
      scrollbar-color: var(--pf-scrollbar-thumb) var(--pf-scrollbar-track);
    }
 
-   #pf-metrics-container::-webkit-scrollbar {
+   #pf-flat-container {
+     display: none;
+   }
+
+   #pf-metrics-container::-webkit-scrollbar,
+   #pf-flat-container::-webkit-scrollbar {
      width: 8px;
    }
 
-   #pf-metrics-container::-webkit-scrollbar-track {
+   #pf-metrics-container::-webkit-scrollbar-track,
+   #pf-flat-container::-webkit-scrollbar-track {
      background: var(--pf-scrollbar-track);
    }
 
-   #pf-metrics-container::-webkit-scrollbar-thumb {
+   #pf-metrics-container::-webkit-scrollbar-thumb,
+   #pf-flat-container::-webkit-scrollbar-thumb {
      background-color: var(--pf-scrollbar-thumb);
      border-radius: 999px;
      border: 2px solid var(--pf-scrollbar-track);
      background-clip: content-box;
    }
 
-   #pf-metrics-container::-webkit-scrollbar-corner {
+   #pf-raw-container {
+     display: none;
+     flex: 1;
+     min-width: 0;
+     min-height: 0;
+     overflow: auto;
+     padding: 1em;
+     white-space: pre;
+     line-height: 1.4;
+     background-color: var(--pf-bg);
+     color: var(--pf-fg);
+   }
+
+   #pf-metrics-container::-webkit-scrollbar-corner,
+   #pf-flat-container::-webkit-scrollbar-corner {
      background: var(--pf-scrollbar-track);
    }
 
@@ -647,6 +704,9 @@
      font-size: 0.88em;
      font-weight: bold;
      color: var(--pf-metric-name-color);
+     overflow-wrap: anywhere;
+     word-break: break-word;
+     min-width: 0;
    }
 
    .pf-family-pill {
@@ -769,6 +829,28 @@
      text-align: center;
    }
 
+   #pf-root.pf-view-raw .pf-sidebar,
+   #pf-root.pf-view-raw .pf-main-search,
+   #pf-root.pf-view-raw #pf-metrics-container,
+   #pf-root.pf-view-raw #pf-flat-container {
+     display: none;
+   }
+
+   #pf-root.pf-view-raw #pf-raw-container {
+     display: block;
+   }
+
+   #pf-root.pf-view-flat .pf-sidebar,
+   #pf-root.pf-view-flat .pf-main-search,
+   #pf-root.pf-view-flat #pf-metrics-container,
+   #pf-root.pf-view-flat #pf-raw-container {
+     display: none;
+   }
+
+   #pf-root.pf-view-flat #pf-flat-container {
+     display: block;
+   }
+
 
   @media (max-width: 900px) {
     :root {
@@ -783,7 +865,8 @@
       height: auto;
     }
 
-    #pf-metrics-container {
+    #pf-metrics-container,
+    #pf-flat-container {
       height: auto;
       overflow: visible;
       padding: 1em;
@@ -815,16 +898,6 @@
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M18 6 6 18"></path>' +
     '<path d="M6 6 18 18"></path>' +
-    '</svg>';
-  const COLLAPSE_ALL_ICON_SVG =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="m7 14 5-5 5 5"></path>' +
-    '<path d="m7 19 5-5 5 5"></path>' +
-    '</svg>';
-  const EXPAND_ALL_ICON_SVG =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="m7 5 5 5 5-5"></path>' +
-    '<path d="m7 10 5 5 5-5"></path>' +
     '</svg>';
   const MOON_ICON_SVG =
     '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
@@ -974,6 +1047,7 @@
       this.orphans = [];
       this.familyMetadata = new Map();
       this.familyOpenState = new Map();
+      this.parsedEntries = [];
       this.navHandlerAttached = false;
       this.sidebarHandlerAttached = false;
       this.resizeHandlerAttached = false;
@@ -1036,6 +1110,7 @@
       this.groups = [];
       this.orphans = [];
       this.familyMetadata = new Map();
+      this.parsedEntries = [];
 
       const parsedEntries = [];
       lines.forEach((line, index) => {
@@ -1105,6 +1180,7 @@
           }
         }
       });
+      this.parsedEntries = parsedEntries;
     }
 
     renderFamilyHtml(family, entriesHtml, options) {
@@ -1482,6 +1558,19 @@
         this.onNavRender();
       }
     }
+
+    renderFlatEntries() {
+      const container = document.getElementById('pf-flat-container');
+      if (!container) return;
+      const entriesHtml = this.parsedEntries
+        .map((parsed) => {
+          const entry = this.createEntry(parsed);
+          return entry ? entry.getHtml() : '';
+        })
+        .filter(Boolean)
+        .join('\n');
+      container.innerHTML = entriesHtml || '<div class="pf-empty">No metrics found.</div>';
+    }
   }
 
   class PrometheusUIManager {
@@ -1489,14 +1578,18 @@
       this.currentTheme = currentTheme;
       this.browserAPI = browserAPI;
       this.onSearch = typeof handlers.onSearch === 'function' ? handlers.onSearch : () => {};
-      this.onToggleAll = typeof handlers.onToggleAll === 'function' ? handlers.onToggleAll : null;
-      this.getAllOpenState = typeof handlers.getAllOpenState === 'function' ? handlers.getAllOpenState : null;
       this.searchBarVisible = false;
       this.searchContainer = null;
       this.searchButton = null;
-      this.toggleAllButton = null;
       this.sunIcon = null;
       this.moonIcon = null;
+      this.viewMode = 'formatted';
+      this.viewButtons = {
+        formatted: null,
+        flat: null,
+        raw: null,
+      };
+      this.viewToggleInitialized = false;
     }
 
     injectCSS() {
@@ -1507,6 +1600,96 @@
       style.textContent = prometheusFormatterCSS;
       document.head.appendChild(style);
     }
+
+    getTopControlsContainer() {
+      let container = document.getElementById('pf-top-controls');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'pf-top-controls';
+        container.classList.add('pf-top-controls');
+        document.body.appendChild(container);
+      }
+      return container;
+    }
+
+    injectViewToggleUI() {
+      if (this.viewToggleInitialized) return;
+      const viewContainer = document.createElement('div');
+      viewContainer.id = 'pf-view-controls';
+      viewContainer.classList.add('pf-view-controls');
+
+      const viewToggle = document.createElement('div');
+      viewToggle.classList.add('pf-view-toggle');
+
+      const formattedButton = document.createElement('button');
+      formattedButton.type = 'button';
+      formattedButton.classList.add('pf-toggle-button');
+      formattedButton.textContent = 'Formatted';
+      formattedButton.addEventListener('click', () => this.setViewMode('formatted'));
+
+      const rawButton = document.createElement('button');
+      rawButton.type = 'button';
+      rawButton.classList.add('pf-toggle-button');
+      rawButton.textContent = 'Raw';
+      rawButton.addEventListener('click', () => this.setViewMode('raw'));
+
+      const flatButton = document.createElement('button');
+      flatButton.type = 'button';
+      flatButton.classList.add('pf-toggle-button');
+      flatButton.textContent = 'Flat';
+      flatButton.addEventListener('click', () => this.setViewMode('flat'));
+
+      viewToggle.appendChild(formattedButton);
+      viewToggle.appendChild(flatButton);
+      viewToggle.appendChild(rawButton);
+      viewContainer.appendChild(viewToggle);
+      const topControls = this.getTopControlsContainer();
+      const themeControls = document.getElementById('pf-theme-controls');
+      if (themeControls && themeControls.parentElement === topControls) {
+        topControls.insertBefore(viewContainer, themeControls);
+      } else {
+        topControls.appendChild(viewContainer);
+      }
+
+      this.viewButtons.formatted = formattedButton;
+      this.viewButtons.flat = flatButton;
+      this.viewButtons.raw = rawButton;
+      this.viewToggleInitialized = true;
+      this.updateViewToggleButtons();
+    }
+
+    setViewMode(mode) {
+      const nextMode = mode === 'raw' ? 'raw' : mode === 'flat' ? 'flat' : 'formatted';
+      this.viewMode = nextMode;
+      const root = document.getElementById('pf-root');
+      if (root) {
+        root.classList.toggle('pf-view-raw', nextMode === 'raw');
+        root.classList.toggle('pf-view-flat', nextMode === 'flat');
+      }
+      this.updateViewToggleButtons();
+      if (this.browserAPI?.storage?.local) {
+        this.browserAPI.storage.local.set({ viewMode: nextMode });
+      }
+    }
+
+    updateViewToggleButtons() {
+      const isRaw = this.viewMode === 'raw';
+      const isFlat = this.viewMode === 'flat';
+      if (this.viewButtons.formatted) {
+        const isActive = !isRaw && !isFlat;
+        this.viewButtons.formatted.classList.toggle('active', isActive);
+        this.viewButtons.formatted.setAttribute('aria-pressed', String(isActive));
+      }
+      if (this.viewButtons.flat) {
+        this.viewButtons.flat.classList.toggle('active', isFlat);
+        this.viewButtons.flat.setAttribute('aria-pressed', String(isFlat));
+      }
+      if (this.viewButtons.raw) {
+        this.viewButtons.raw.classList.toggle('active', isRaw);
+        this.viewButtons.raw.setAttribute('aria-pressed', String(isRaw));
+      }
+    }
+
 
     injectSearchUI() {
       const searchContainer = document.createElement('div');
@@ -1549,7 +1732,7 @@
     }
 
     ensureSidebarButtons() {
-      if (this.searchButton && this.toggleAllButton && this.sunIcon && this.moonIcon) {
+      if (this.searchButton && this.sunIcon && this.moonIcon) {
         return;
       }
 
@@ -1561,17 +1744,6 @@
       searchButton.innerHTML = SEARCH_ICON_SVG;
       searchButton.addEventListener('click', () => {
         this.toggleSearchBar();
-      });
-
-      const toggleAllButton = document.createElement('button');
-      toggleAllButton.id = 'pf-toggle-all';
-      toggleAllButton.type = 'button';
-      toggleAllButton.classList.add('pf-icon-button');
-      toggleAllButton.setAttribute('aria-label', 'Collapse all families');
-      toggleAllButton.title = 'Collapse all families';
-      toggleAllButton.innerHTML = COLLAPSE_ALL_ICON_SVG;
-      toggleAllButton.addEventListener('click', () => {
-        this.toggleAllFamilies();
       });
 
       const sunIcon = document.createElement('button');
@@ -1593,38 +1765,8 @@
       moonIcon.addEventListener('click', () => this.switchTheme('dark'));
 
       this.searchButton = searchButton;
-      this.toggleAllButton = toggleAllButton;
       this.sunIcon = sunIcon;
       this.moonIcon = moonIcon;
-    }
-
-    toggleAllFamilies() {
-      if (!this.onToggleAll || !this.getAllOpenState) return;
-      const state = this.getAllOpenState();
-      if (state === 'none') return;
-      const shouldOpen = state === 'all-closed';
-      this.onToggleAll(shouldOpen);
-      this.updateToggleAllButton();
-    }
-
-    updateToggleAllButton() {
-      if (!this.toggleAllButton || !this.getAllOpenState) return;
-      const state = this.getAllOpenState();
-      if (state === 'none') {
-        this.toggleAllButton.style.display = 'none';
-        return;
-      }
-
-      this.toggleAllButton.style.display = 'inline-flex';
-      if (state === 'all-closed') {
-        this.toggleAllButton.innerHTML = EXPAND_ALL_ICON_SVG;
-        this.toggleAllButton.setAttribute('aria-label', 'Expand all families');
-        this.toggleAllButton.title = 'Expand all families';
-      } else {
-        this.toggleAllButton.innerHTML = COLLAPSE_ALL_ICON_SVG;
-        this.toggleAllButton.setAttribute('aria-label', 'Collapse all families');
-        this.toggleAllButton.title = 'Collapse all families';
-      }
     }
 
     mountSidebarControls() {
@@ -1634,10 +1776,6 @@
       if (this.searchButton && this.searchButton.parentElement !== container) {
         container.appendChild(this.searchButton);
       }
-      if (this.toggleAllButton && this.toggleAllButton.parentElement !== container) {
-        container.appendChild(this.toggleAllButton);
-      }
-      this.updateToggleAllButton();
     }
 
     shouldUseMainSearch() {
@@ -1663,12 +1801,15 @@
     }
 
     mountThemeControls() {
+      const topControls = this.getTopControlsContainer();
       let container = document.getElementById('pf-theme-controls');
       if (!container) {
         container = document.createElement('div');
         container.id = 'pf-theme-controls';
         container.classList.add('pf-theme-controls');
-        document.body.appendChild(container);
+      }
+      if (container.parentElement !== topControls) {
+        topControls.appendChild(container);
       }
       this.ensureSidebarButtons();
       [this.sunIcon, this.moonIcon].forEach((button) => {
@@ -1786,11 +1927,12 @@
 
     if (document.getElementById('pf-root')) return;
 
-    const bodyText = document.body.textContent.trim();
+    const rawText = document.body.textContent || '';
+    const bodyText = rawText.trim();
     if (!bodyText) return;
 
     const MAX_SIZE_BYTES = 32 * 1024 * 1024; // 32 MB
-    const contentSize = new Blob([bodyText]).size;
+    const contentSize = new Blob([rawText]).size;
 
     if (contentSize > MAX_SIZE_BYTES) {
       console.warn('Content size exceeds 32 MB. Skipping processing.');
@@ -1828,22 +1970,32 @@
     const metricsContainer = document.createElement('div');
     metricsContainer.id = 'pf-metrics-container';
 
+    const flatContainer = document.createElement('div');
+    flatContainer.id = 'pf-flat-container';
+
+    const rawContainer = document.createElement('pre');
+    rawContainer.id = 'pf-raw-container';
+    rawContainer.classList.add('pf-raw-container');
+    rawContainer.textContent = rawText;
+
     sidebar.appendChild(navContainer);
     sidebar.appendChild(resizer);
     layout.appendChild(sidebar);
     main.appendChild(mainSearch);
     main.appendChild(metricsContainer);
+    main.appendChild(flatContainer);
+    main.appendChild(rawContainer);
     layout.appendChild(main);
     contentContainer.appendChild(layout);
     container.appendChild(contentContainer);
     document.body.appendChild(container);
 
-    browserAPI.storage.local.get(['theme', 'sidebarWidth', 'sidebarCollapsed'], (result) => {
+    browserAPI.storage.local.get(['theme', 'sidebarWidth', 'sidebarCollapsed', 'viewMode'], (result) => {
       const currentTheme = result.theme || 'dark';
       document.documentElement.setAttribute('data-theme', currentTheme);
 
       const metricsHandler = new PrometheusMetricsHandler(browserAPI);
-      const lines = bodyText.split('\n');
+      const lines = rawText.split('\n');
       metricsHandler.processLines(lines);
       metricsHandler.applySidebarPreferences({
         sidebarWidth: result.sidebarWidth,
@@ -1854,29 +2006,25 @@
         onSearch: (query) => {
           metricsHandler.renderEntries(query);
         },
-        onToggleAll: (open) => {
-          metricsHandler.setAllFamiliesOpen(open);
-        },
-        getAllOpenState: () => metricsHandler.getAllFamiliesOpenState(),
       });
 
       uiManager.injectCSS();
+      uiManager.injectViewToggleUI();
+      if (result.viewMode) {
+        uiManager.setViewMode(result.viewMode);
+      }
       uiManager.injectSearchUI();
       metricsHandler.setNavRenderHook(() => {
         uiManager.mountSidebarControls();
         uiManager.mountSearchBar();
-        uiManager.updateToggleAllButton();
       });
       metricsHandler.setSidebarToggleHook(() => {
         uiManager.mountSearchBar();
       });
-      metricsHandler.setFamilyToggleHook(() => {
-        uiManager.updateToggleAllButton();
-      });
       metricsHandler.renderEntries('');
+      metricsHandler.renderFlatEntries();
       uiManager.mountSidebarControls();
       uiManager.mountSearchBar();
-      uiManager.updateToggleAllButton();
     });
   };
 
