@@ -157,14 +157,33 @@
    }
 
    .pf-search-container {
-     display: none;
+     display: flex;
      align-items: center;
      width: 100%;
+     max-height: 0;
+     opacity: 0;
+     transform: translateY(-6px);
+     pointer-events: none;
+     overflow: hidden;
+     margin: 0;
+     transition: max-height 0.2s ease, opacity 0.2s ease, transform 0.2s ease, margin 0.2s ease;
    }
 
    .pf-search-container.active {
-     display: flex;
+     max-height: 64px;
+     opacity: 1;
+     transform: translateY(0);
+     pointer-events: auto;
      margin-bottom: 0.25em;
+   }
+
+   .pf-search-container.pf-search-in-main {
+     width: 100%;
+     max-width: 540px;
+   }
+
+   .pf-search-container.pf-search-in-main.active {
+     margin: 0.4em 0 0.2em;
    }
 
    .pf-search-field {
@@ -218,7 +237,7 @@
    }
 
    .pf-search-container.has-value .pf-search-clear {
-     opacity: 0.75;
+     opacity: 0.85;
      pointer-events: auto;
    }
 
@@ -259,6 +278,11 @@
      display: block;
    }
 
+   #pf-filter-icon svg {
+     width: 20px;
+     height: 20px;
+   }
+
    .pf-theme-controls {
      position: fixed;
      top: 0.5em;
@@ -285,10 +309,24 @@
      min-height: 0;
    }
 
+   .pf-main {
+     flex: 1;
+     min-width: 0;
+     min-height: 0;
+     display: flex;
+     flex-direction: column;
+   }
+
+   .pf-main-search {
+     padding: 0 1em;
+     display: flex;
+     justify-content: center;
+   }
+
    #pf-metrics-container {
      flex: 1;
      min-width: 0;
-     height: 100%;
+     min-height: 0;
      overflow-y: auto;
      padding: 1em;
      scrollbar-width: thin;
@@ -319,10 +357,11 @@
      top: 0;
      align-self: stretch;
      display: flex;
-     height: 100%;
+      height: 100%;
      width: 300px;
      min-width: 220px;
      max-width: 420px;
+     transition: width 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
      border-left: 1px solid var(--pf-nav-border);
      border-right: none;
      border-top: none;
@@ -419,11 +458,16 @@
   }
 
    .pf-sidebar.collapsed .pf-sidebar-controls {
-     display: none;
+     display: flex;
+     flex-direction: column;
+     align-items: center;
+     gap: 0.35em;
    }
 
    .pf-sidebar.collapsed .pf-family-nav-header {
      justify-content: center;
+     flex-direction: column;
+     gap: 0.35em;
    }
 
    .pf-sidebar-resizer {
@@ -446,6 +490,10 @@
    body.pf-resizing {
      cursor: col-resize;
      user-select: none;
+   }
+
+   body.pf-resizing .pf-sidebar {
+     transition: none;
    }
 
   .pf-family-nav-empty {
@@ -766,6 +814,16 @@
     '<path d="M18 6 6 18"></path>' +
     '<path d="M6 6 18 18"></path>' +
     '</svg>';
+  const COLLAPSE_ALL_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m7 14 5-5 5 5"></path>' +
+    '<path d="m7 19 5-5 5 5"></path>' +
+    '</svg>';
+  const EXPAND_ALL_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m7 5 5 5 5-5"></path>' +
+    '<path d="m7 10 5 5 5-5"></path>' +
+    '</svg>';
   const MOON_ICON_SVG =
     '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
     '<g id="SVGRepo_bgCarrier" stroke-width="0"></g>' +
@@ -920,10 +978,21 @@
       this.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
       this.sidebarCollapsed = false;
       this.onNavRender = null;
+      this.onFamilyToggle = null;
+      this.onSidebarToggle = null;
+      this.bulkToggleInProgress = false;
     }
 
     setNavRenderHook(callback) {
       this.onNavRender = typeof callback === 'function' ? callback : null;
+    }
+
+    setFamilyToggleHook(callback) {
+      this.onFamilyToggle = typeof callback === 'function' ? callback : null;
+    }
+
+    setSidebarToggleHook(callback) {
+      this.onSidebarToggle = typeof callback === 'function' ? callback : null;
     }
 
     createEntry(parsed) {
@@ -1156,6 +1225,9 @@
           const familyName = details.dataset.familyName;
           if (!familyName) return;
           this.familyOpenState.set(familyName, details.open);
+          if (this.onFamilyToggle && !this.bulkToggleInProgress) {
+            this.onFamilyToggle();
+          }
         });
       });
     }
@@ -1211,6 +1283,9 @@
       }
       this.updateSidebarToggleButton();
       this.updateSidebarOffset();
+      if (this.onSidebarToggle) {
+        this.onSidebarToggle();
+      }
     }
 
     setSidebarWidth(width, persist) {
@@ -1243,6 +1318,9 @@
       }
       this.updateSidebarToggleButton();
       this.updateSidebarOffset();
+      if (this.onSidebarToggle) {
+        this.onSidebarToggle();
+      }
     }
 
     attachSidebarHandlers() {
@@ -1284,9 +1362,49 @@
       if (this.resizeHandlerAttached) return;
       const handler = () => {
         this.updateSidebarOffset();
+        if (this.onSidebarToggle) {
+          this.onSidebarToggle();
+        }
       };
       window.addEventListener('resize', handler);
       this.resizeHandlerAttached = true;
+    }
+
+    getAllFamiliesOpenState() {
+      const container = document.getElementById('pf-metrics-container');
+      if (!container) return 'none';
+      const detailsList = container.querySelectorAll('details.pf-family');
+      if (!detailsList.length) return 'none';
+      let openCount = 0;
+      detailsList.forEach((details) => {
+        if (details.open) {
+          openCount += 1;
+        }
+      });
+      if (openCount === 0) return 'all-closed';
+      if (openCount === detailsList.length) return 'all-open';
+      return 'mixed';
+    }
+
+    setAllFamiliesOpen(open) {
+      const nextOpen = Boolean(open);
+      this.groups.forEach((family) => {
+        this.familyOpenState.set(family.name, nextOpen);
+      });
+
+      const container = document.getElementById('pf-metrics-container');
+      if (!container) return;
+      const detailsList = container.querySelectorAll('details.pf-family');
+      if (!detailsList.length) return;
+
+      this.bulkToggleInProgress = true;
+      detailsList.forEach((details) => {
+        details.open = nextOpen;
+      });
+      this.bulkToggleInProgress = false;
+      if (this.onFamilyToggle) {
+        this.onFamilyToggle();
+      }
     }
 
     /**
@@ -1367,13 +1485,16 @@
   }
 
   class PrometheusUIManager {
-    constructor(currentTheme, browserAPI, onSearch) {
+    constructor(currentTheme, browserAPI, handlers = {}) {
       this.currentTheme = currentTheme;
       this.browserAPI = browserAPI;
-      this.onSearch = onSearch;
+      this.onSearch = typeof handlers.onSearch === 'function' ? handlers.onSearch : () => {};
+      this.onToggleAll = typeof handlers.onToggleAll === 'function' ? handlers.onToggleAll : null;
+      this.getAllOpenState = typeof handlers.getAllOpenState === 'function' ? handlers.getAllOpenState : null;
       this.searchBarVisible = false;
       this.searchContainer = null;
       this.searchButton = null;
+      this.toggleAllButton = null;
       this.sunIcon = null;
       this.moonIcon = null;
     }
@@ -1428,7 +1549,7 @@
     }
 
     ensureSidebarButtons() {
-      if (this.searchButton && this.sunIcon && this.moonIcon) {
+      if (this.searchButton && this.toggleAllButton && this.sunIcon && this.moonIcon) {
         return;
       }
 
@@ -1439,9 +1560,18 @@
       searchButton.setAttribute('aria-label', 'Search metrics');
       searchButton.innerHTML = SEARCH_ICON_SVG;
       searchButton.addEventListener('click', () => {
-        if (this.searchContainer) {
-          this.toggleSearchBar(this.searchContainer);
-        }
+        this.toggleSearchBar();
+      });
+
+      const toggleAllButton = document.createElement('button');
+      toggleAllButton.id = 'pf-toggle-all';
+      toggleAllButton.type = 'button';
+      toggleAllButton.classList.add('pf-icon-button');
+      toggleAllButton.setAttribute('aria-label', 'Collapse all families');
+      toggleAllButton.title = 'Collapse all families';
+      toggleAllButton.innerHTML = COLLAPSE_ALL_ICON_SVG;
+      toggleAllButton.addEventListener('click', () => {
+        this.toggleAllFamilies();
       });
 
       const sunIcon = document.createElement('button');
@@ -1463,8 +1593,38 @@
       moonIcon.addEventListener('click', () => this.switchTheme('dark'));
 
       this.searchButton = searchButton;
+      this.toggleAllButton = toggleAllButton;
       this.sunIcon = sunIcon;
       this.moonIcon = moonIcon;
+    }
+
+    toggleAllFamilies() {
+      if (!this.onToggleAll || !this.getAllOpenState) return;
+      const state = this.getAllOpenState();
+      if (state === 'none') return;
+      const shouldOpen = state === 'all-closed';
+      this.onToggleAll(shouldOpen);
+      this.updateToggleAllButton();
+    }
+
+    updateToggleAllButton() {
+      if (!this.toggleAllButton || !this.getAllOpenState) return;
+      const state = this.getAllOpenState();
+      if (state === 'none') {
+        this.toggleAllButton.style.display = 'none';
+        return;
+      }
+
+      this.toggleAllButton.style.display = 'inline-flex';
+      if (state === 'all-closed') {
+        this.toggleAllButton.innerHTML = EXPAND_ALL_ICON_SVG;
+        this.toggleAllButton.setAttribute('aria-label', 'Expand all families');
+        this.toggleAllButton.title = 'Expand all families';
+      } else {
+        this.toggleAllButton.innerHTML = COLLAPSE_ALL_ICON_SVG;
+        this.toggleAllButton.setAttribute('aria-label', 'Collapse all families');
+        this.toggleAllButton.title = 'Collapse all families';
+      }
     }
 
     mountSidebarControls() {
@@ -1474,15 +1634,32 @@
       if (this.searchButton && this.searchButton.parentElement !== container) {
         container.appendChild(this.searchButton);
       }
+      if (this.toggleAllButton && this.toggleAllButton.parentElement !== container) {
+        container.appendChild(this.toggleAllButton);
+      }
+      this.updateToggleAllButton();
+    }
+
+    shouldUseMainSearch() {
+      const sidebar = document.getElementById('pf-sidebar');
+      if (!sidebar) return true;
+      const style = window.getComputedStyle(sidebar);
+      if (style.display === 'none') return true;
+      return sidebar.classList.contains('collapsed');
     }
 
     mountSearchBar() {
       if (!this.searchContainer) return;
-      const container = document.querySelector('.pf-sidebar-search');
+      const useMainSearch = this.shouldUseMainSearch();
+      const container = useMainSearch
+        ? document.getElementById('pf-main-search')
+        : document.querySelector('.pf-sidebar-search');
       if (!container) return;
       if (this.searchContainer.parentElement !== container) {
         container.appendChild(this.searchContainer);
       }
+      this.searchContainer.classList.toggle('pf-search-in-main', useMainSearch);
+      this.searchContainer.classList.toggle('pf-search-in-sidebar', !useMainSearch);
     }
 
     mountThemeControls() {
@@ -1537,10 +1714,11 @@
 
     /**
      * Toggle the visibility of the search bar.
-     * @param {HTMLElement} searchContainer - The search container element.
      */
-    toggleSearchBar(searchContainer) {
-      if (!searchContainer) return;
+    toggleSearchBar() {
+      if (!this.searchContainer) return;
+      this.mountSearchBar();
+      const searchContainer = this.searchContainer;
       if (this.searchBarVisible) {
         searchContainer.classList.remove('active', 'has-value');
         this.searchBarVisible = false;
@@ -1640,13 +1818,22 @@
     const resizer = document.createElement('div');
     resizer.classList.add('pf-sidebar-resizer');
 
+    const main = document.createElement('div');
+    main.classList.add('pf-main');
+
+    const mainSearch = document.createElement('div');
+    mainSearch.id = 'pf-main-search';
+    mainSearch.classList.add('pf-main-search');
+
     const metricsContainer = document.createElement('div');
     metricsContainer.id = 'pf-metrics-container';
 
     sidebar.appendChild(navContainer);
     sidebar.appendChild(resizer);
     layout.appendChild(sidebar);
-    layout.appendChild(metricsContainer);
+    main.appendChild(mainSearch);
+    main.appendChild(metricsContainer);
+    layout.appendChild(main);
     contentContainer.appendChild(layout);
     container.appendChild(contentContainer);
     document.body.appendChild(container);
@@ -1663,8 +1850,14 @@
         sidebarCollapsed: result.sidebarCollapsed,
       });
 
-      const uiManager = new PrometheusUIManager(currentTheme, browserAPI, (query) => {
-        metricsHandler.renderEntries(query);
+      const uiManager = new PrometheusUIManager(currentTheme, browserAPI, {
+        onSearch: (query) => {
+          metricsHandler.renderEntries(query);
+        },
+        onToggleAll: (open) => {
+          metricsHandler.setAllFamiliesOpen(open);
+        },
+        getAllOpenState: () => metricsHandler.getAllFamiliesOpenState(),
       });
 
       uiManager.injectCSS();
@@ -1672,10 +1865,18 @@
       metricsHandler.setNavRenderHook(() => {
         uiManager.mountSidebarControls();
         uiManager.mountSearchBar();
+        uiManager.updateToggleAllButton();
+      });
+      metricsHandler.setSidebarToggleHook(() => {
+        uiManager.mountSearchBar();
+      });
+      metricsHandler.setFamilyToggleHook(() => {
+        uiManager.updateToggleAllButton();
       });
       metricsHandler.renderEntries('');
       uiManager.mountSidebarControls();
       uiManager.mountSearchBar();
+      uiManager.updateToggleAllButton();
     });
   };
 
