@@ -112,6 +112,7 @@
 
    :root {
      --pf-sidebar-width: 0px;
+     --pf-virtual-row-height: 24px;
    }
 
    html, body {
@@ -206,7 +207,7 @@
      color: var(--pf-fg);
      -webkit-text-fill-color: var(--pf-fg);
      border: 1px solid var(--pf-search-border);
-     border-radius: 10px;
+     border-radius: 6px;
      box-shadow: none;
      outline: none;
    }
@@ -294,6 +295,7 @@
      pointer-events: auto;
    }
 
+
    .pf-theme-controls {
      display: flex;
      align-items: center;
@@ -309,7 +311,7 @@
    .pf-view-toggle {
      display: inline-flex;
      border: 1px solid var(--pf-family-pill-border);
-     border-radius: 999px;
+     border-radius: 4px;
      overflow: hidden;
      background-color: var(--pf-family-pill-bg);
    }
@@ -369,6 +371,43 @@
      scrollbar-color: var(--pf-scrollbar-thumb) var(--pf-scrollbar-track);
    }
 
+   #pf-flat-container.pf-virtualized {
+     position: relative;
+     overflow-y: auto;
+     overflow-x: auto;
+   }
+
+   .pf-virtual-spacer {
+     width: 1px;
+     opacity: 0;
+     pointer-events: none;
+   }
+
+   .pf-virtual-list {
+     position: absolute;
+     top: 0;
+     left: 0;
+     right: 0;
+   }
+
+   .pf-virtual-row {
+     height: var(--pf-virtual-row-height);
+     display: flex;
+     align-items: center;
+     padding: 0 0.1em;
+     white-space: nowrap;
+   }
+
+   .pf-virtual-row > * {
+     white-space: nowrap;
+   }
+
+   .pf-virtual-row .pf-section,
+   .pf-virtual-row .pf-comment,
+   .pf-virtual-row .pf-warning {
+     margin: 0;
+   }
+
    #pf-flat-container {
      display: none;
    }
@@ -386,7 +425,7 @@
    #pf-metrics-container::-webkit-scrollbar-thumb,
    #pf-flat-container::-webkit-scrollbar-thumb {
      background-color: var(--pf-scrollbar-thumb);
-     border-radius: 999px;
+     border-radius: 6px;
      border: 2px solid var(--pf-scrollbar-track);
      background-clip: content-box;
    }
@@ -475,7 +514,7 @@
      color: var(--pf-nav-title-color);
      width: 2em;
      height: 2em;
-     border-radius: 6px;
+     border-radius: 4px;
      cursor: pointer;
      padding: 0;
      line-height: 1;
@@ -591,7 +630,7 @@
 
    .pf-family-nav-list::-webkit-scrollbar-thumb {
      background-color: var(--pf-nav-border);
-     border-radius: 999px;
+     border-radius: 6px;
      border: 2px solid transparent;
      background-clip: content-box;
    }
@@ -603,7 +642,7 @@
    .pf-family-nav-list a {
      display: block;
      padding: 0.35em 0.5em;
-     border-radius: 6px;
+     border-radius: 4px;
      color: var(--pf-metric-name-color);
      text-decoration: none;
      font-size: 0.95em;
@@ -625,17 +664,9 @@
 
    .pf-family {
      border: 1px solid var(--pf-family-border);
-     border-radius: 10px;
+     border-radius: 6px;
      background-color: var(--pf-family-bg);
      scroll-margin-top: 4em;
-   }
-
-   .pf-family summary {
-     list-style: none;
-   }
-
-   .pf-family summary::-webkit-details-marker {
-     display: none;
    }
 
    .pf-family-header {
@@ -644,43 +675,14 @@
      padding: 0.18em 0.4em;
      cursor: pointer;
      background-color: var(--pf-family-header-bg);
-     border-radius: 10px;
+     border-radius: 6px 6px 0 0;
+     border-bottom: 1px solid var(--pf-family-border);
      user-select: none;
    }
 
    .pf-family-header-hit {
      box-shadow: inset 0 0 0 2px var(--pf-search-hit-border);
      background-color: var(--pf-search-hit-bg);
-   }
-
-   .pf-family[open] .pf-family-header {
-     border-bottom: 1px solid var(--pf-family-border);
-     border-bottom-left-radius: 0;
-     border-bottom-right-radius: 0;
-   }
-
-   .pf-family-toggle {
-     width: 0.7em;
-     flex-shrink: 0;
-     display: flex;
-     align-items: flex-start;
-     justify-content: center;
-     padding-top: 0;
-   }
-
-   .pf-family-toggle svg {
-     width: 0.9em;
-     height: 0.9em;
-     stroke: var(--pf-comment-color);
-     fill: none;
-     stroke-width: 2;
-     stroke-linecap: round;
-     stroke-linejoin: round;
-     transition: transform 0.2s ease;
-   }
-
-   .pf-family[open] .pf-family-toggle svg {
-     transform: rotate(90deg);
    }
 
    .pf-family-header-content {
@@ -696,7 +698,7 @@
       gap: 0.2em;
       align-items: baseline;
       padding: 0.1em 0.1em;
-      border-radius: 5px;
+      border-radius: 3px;
       background-color: var(--pf-family-row-bg);
     }
 
@@ -713,7 +715,7 @@
      display: inline-flex;
      align-items: center;
      padding: 0.1em 0.45em;
-     border-radius: 999px;
+     border-radius: 8px;
      border: 1px solid var(--pf-family-pill-border);
      background-color: var(--pf-family-pill-bg);
      color: var(--pf-family-pill-fg);
@@ -760,7 +762,7 @@
      background-color: var(--pf-search-hit-bg);
      border-left: 3px solid var(--pf-search-hit-border);
      padding: 0.25em 0.5em;
-     border-radius: 6px;
+     border-radius: 4px;
    }
 
    .pf-metric-name {
@@ -824,7 +826,7 @@
    .pf-empty {
      padding: 1em;
      border: 1px dashed var(--pf-family-border);
-     border-radius: 8px;
+     border-radius: 5px;
      color: var(--pf-comment-color);
      text-align: center;
    }
@@ -872,11 +874,23 @@
       padding: 1em;
     }
 
+    #pf-root.pf-view-flat #pf-flat-container.pf-virtualized {
+      height: 100vh;
+      overflow: auto;
+    }
+
     .pf-sidebar {
       display: none;
     }
   }
    `;
+
+  const DEFAULT_MAX_SIZE_BYTES = 32 * 1024 * 1024;
+  const DEFAULT_LARGE_PAYLOAD_BYTES = 6 * 1024 * 1024;
+  const DEFAULT_VIRTUAL_ROW_HEIGHT = 24;
+  const DEFAULT_VIRTUAL_OVERSCAN = 8;
+  const IDLE_TIMEOUT_MS = 100;
+  const CHUNK_TIME_SLICE_MS = 12;
 
   const FAMILY_SUFFIXES = ['_bucket', '_sum', '_count'];
   const META_COMMENT_TYPES = new Set(['HELP', 'TYPE', 'UNIT']);
@@ -884,10 +898,6 @@
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' +
     '<rect width="18" height="18" x="3" y="3" rx="2"></rect>' +
     '<path d="M9 3v18"></path>' +
-    '</svg>';
-  const FAMILY_TOGGLE_SVG =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' +
-    '<path d="m9 6 6 6-6 6"></path>' +
     '</svg>';
   const SEARCH_ICON_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -909,6 +919,72 @@
     '<path d="M12 22C17.5228 22 22 17.5228 22 12C22 11.5373 21.3065 11.4608 21.0672 11.8568C19.9289 13.7406 17.8615 15 15.5 15C11.9101 15 9 12.0899 9 8.5C9 6.13845 10.2594 4.07105 12.1432 2.93276C12.5392 2.69347 12.4627 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#1C274C"></path>' +
     '</g>' +
     '</svg>';
+
+  const formatBytes = (value) => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes)) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let index = -1;
+    let current = bytes;
+    while (current >= 1024 && index < units.length - 1) {
+      current /= 1024;
+      index += 1;
+    }
+    return `${current.toFixed(current >= 10 ? 0 : 1)} ${units[index]}`;
+  };
+
+  const normalizeNumberSetting = (value, fallback) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return fallback;
+    }
+    return numeric;
+  };
+
+  const resolveSettings = (stored = {}) => {
+    const rootSettings = root.PrometheusFormatterSettings || {};
+    const maxPayloadBytes = normalizeNumberSetting(
+      rootSettings.maxPayloadBytes,
+      normalizeNumberSetting(stored.maxPayloadBytes, DEFAULT_MAX_SIZE_BYTES)
+    );
+    const largePayloadBytes = normalizeNumberSetting(
+      rootSettings.largePayloadBytes,
+      normalizeNumberSetting(stored.largePayloadBytes, DEFAULT_LARGE_PAYLOAD_BYTES)
+    );
+    const virtualRowHeight = normalizeNumberSetting(
+      rootSettings.virtualRowHeight,
+      normalizeNumberSetting(stored.virtualRowHeight, DEFAULT_VIRTUAL_ROW_HEIGHT)
+    );
+    const virtualOverscan = normalizeNumberSetting(
+      rootSettings.virtualOverscan,
+      normalizeNumberSetting(stored.virtualOverscan, DEFAULT_VIRTUAL_OVERSCAN)
+    );
+
+    return {
+      maxPayloadBytes,
+      largePayloadBytes: Math.min(largePayloadBytes, maxPayloadBytes),
+      virtualRowHeight,
+      virtualOverscan,
+    };
+  };
+
+  const requestIdle = (callback) => {
+    if (typeof root.requestIdleCallback === 'function') {
+      return root.requestIdleCallback(callback, { timeout: IDLE_TIMEOUT_MS });
+    }
+    return root.setTimeout(() => callback({ timeRemaining: () => 0, didTimeout: true }), 0);
+  };
+
+  const shouldYield = (deadline, startTime) => {
+    if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 4) {
+      return true;
+    }
+    if (!deadline || deadline.didTimeout) {
+      return performance.now() - startTime > CHUNK_TIME_SLICE_MS;
+    }
+    return false;
+  };
   const SUN_ICON_SVG =
     '<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--twemoji" preserveAspectRatio="xMidYMid meet" fill="#000000">' +
     '<g id="SVGRepo_bgCarrier" stroke-width="0"></g>' +
@@ -1040,35 +1116,278 @@
     return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
   };
 
+  class VirtualizedList {
+    constructor(container, options = {}) {
+      this.container = container;
+      this.items = [];
+      this.pool = [];
+      this.startIndex = 0;
+      this.endIndex = 0;
+      this.rowHeight = options.rowHeight || DEFAULT_VIRTUAL_ROW_HEIGHT;
+      this.overscan = options.overscan || DEFAULT_VIRTUAL_OVERSCAN;
+      this.renderRow = typeof options.renderRow === 'function' ? options.renderRow : () => {};
+      this.emptyMessage = options.emptyMessage || 'No metrics found.';
+      this.onScroll = this.render.bind(this);
+      this.onResize = () => this.refresh();
+
+      this.container.classList.add('pf-virtualized');
+      this.container.innerHTML = '';
+
+      this.spacer = document.createElement('div');
+      this.spacer.className = 'pf-virtual-spacer';
+
+      this.list = document.createElement('div');
+      this.list.className = 'pf-virtual-list';
+
+      this.emptyState = document.createElement('div');
+      this.emptyState.className = 'pf-empty';
+      this.emptyState.textContent = this.emptyMessage;
+
+      this.container.appendChild(this.spacer);
+      this.container.appendChild(this.list);
+      this.container.appendChild(this.emptyState);
+
+      this.container.addEventListener('scroll', this.onScroll);
+      window.addEventListener('resize', this.onResize);
+    }
+
+    setItems(items = []) {
+      this.items = items;
+      this.refresh(true);
+    }
+
+    refresh(force) {
+      const total = this.items.length;
+      this.spacer.style.height = `${total * this.rowHeight}px`;
+      if (total === 0) {
+        this.list.style.display = 'none';
+        this.spacer.style.display = 'none';
+        this.emptyState.style.display = 'block';
+        return;
+      }
+      this.list.style.display = 'block';
+      this.spacer.style.display = 'block';
+      this.emptyState.style.display = 'none';
+      this.render(force);
+    }
+
+    ensurePool(size) {
+      while (this.pool.length < size) {
+        const row = document.createElement('div');
+        row.className = 'pf-virtual-row';
+        row.style.height = `${this.rowHeight}px`;
+        this.pool.push(row);
+        this.list.appendChild(row);
+      }
+    }
+
+    render(force) {
+      if (!this.container || this.items.length === 0) {
+        return;
+      }
+      const viewportHeight = this.container.clientHeight;
+      if (viewportHeight === 0) {
+        return;
+      }
+      const scrollTop = this.container.scrollTop;
+      const startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.overscan);
+      const endIndex = Math.min(
+        this.items.length,
+        Math.ceil((scrollTop + viewportHeight) / this.rowHeight) + this.overscan
+      );
+      if (!force && startIndex === this.startIndex && endIndex === this.endIndex) {
+        return;
+      }
+      this.startIndex = startIndex;
+      this.endIndex = endIndex;
+
+      const visibleCount = Math.max(0, endIndex - startIndex);
+      this.ensurePool(visibleCount);
+      this.pool.forEach((row) => {
+        row.style.height = `${this.rowHeight}px`;
+      });
+      this.list.style.transform = `translateY(${startIndex * this.rowHeight}px)`;
+
+      for (let i = 0; i < this.pool.length; i += 1) {
+        const row = this.pool[i];
+        const itemIndex = startIndex + i;
+        if (i >= visibleCount) {
+          row.style.display = 'none';
+          continue;
+        }
+        row.style.display = 'flex';
+        if (force || row.dataset.index !== String(itemIndex)) {
+          this.renderRow(row, this.items[itemIndex], itemIndex);
+          row.dataset.index = String(itemIndex);
+        }
+      }
+    }
+
+    destroy() {
+      if (!this.container) return;
+      this.container.removeEventListener('scroll', this.onScroll);
+      window.removeEventListener('resize', this.onResize);
+      this.container = null;
+      this.items = [];
+      this.pool = [];
+    }
+  }
+
   class PrometheusMetricsHandler {
     constructor(browserAPI) {
       this.browserAPI = browserAPI;
       this.groups = [];
       this.orphans = [];
       this.familyMetadata = new Map();
-      this.familyOpenState = new Map();
       this.parsedEntries = [];
+      this.flatEntries = [];
+      this.flatVirtualList = null;
+      this.virtualRowHeight = DEFAULT_VIRTUAL_ROW_HEIGHT;
+      this.virtualOverscan = DEFAULT_VIRTUAL_OVERSCAN;
+      this.lastQuery = '';
       this.navHandlerAttached = false;
       this.sidebarHandlerAttached = false;
       this.resizeHandlerAttached = false;
       this.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
       this.sidebarCollapsed = false;
       this.onNavRender = null;
-      this.onFamilyToggle = null;
       this.onSidebarToggle = null;
-      this.bulkToggleInProgress = false;
+    }
+
+    reset() {
+      this.groups = [];
+      this.orphans = [];
+      this.familyMetadata = new Map();
+      this.parsedEntries = [];
+      this.flatEntries = [];
+    }
+
+    setVirtualizationOptions(options = {}) {
+      if (Number.isFinite(options.rowHeight) && options.rowHeight > 0) {
+        this.virtualRowHeight = options.rowHeight;
+      }
+      if (Number.isFinite(options.overscan) && options.overscan >= 0) {
+        this.virtualOverscan = options.overscan;
+      }
+      const rootElement = document.documentElement;
+      if (rootElement) {
+        rootElement.style.setProperty('--pf-virtual-row-height', `${this.virtualRowHeight}px`);
+      }
+      if (this.flatVirtualList) {
+        this.flatVirtualList.rowHeight = this.virtualRowHeight;
+        this.flatVirtualList.overscan = this.virtualOverscan;
+        this.flatVirtualList.refresh(true);
+      }
     }
 
     setNavRenderHook(callback) {
       this.onNavRender = typeof callback === 'function' ? callback : null;
     }
 
-    setFamilyToggleHook(callback) {
-      this.onFamilyToggle = typeof callback === 'function' ? callback : null;
-    }
-
     setSidebarToggleHook(callback) {
       this.onSidebarToggle = typeof callback === 'function' ? callback : null;
+    }
+
+    collectParsedEntry(parsed) {
+      if (!parsed) return;
+      this.parsedEntries.push(parsed);
+      if (parsed.type === 'comment' && isMetaComment(parsed.commentType)) {
+        const existing = this.familyMetadata.get(parsed.metricName) || {};
+        if (parsed.commentType === 'HELP') {
+          existing.help = parsed.text;
+        } else if (parsed.commentType === 'TYPE') {
+          existing.type = parsed.text;
+        } else if (parsed.commentType === 'UNIT') {
+          existing.unit = parsed.text;
+        }
+        this.familyMetadata.set(parsed.metricName, existing);
+      }
+    }
+
+    buildGroups(options = {}) {
+      this.groups = [];
+      this.orphans = [];
+      this.flatEntries = [];
+      const parsedEntries = this.parsedEntries;
+      const groupsByName = new Map();
+      const usedIds = new Set();
+      const getGroup = (familyName, fallbackName) => {
+        let group = groupsByName.get(familyName);
+        if (group) return group;
+
+        const meta =
+          this.familyMetadata.get(familyName) ||
+          (fallbackName ? this.familyMetadata.get(fallbackName) : null) ||
+          {};
+        group = {
+          name: familyName,
+          id: buildFamilyId(familyName, usedIds),
+          type: meta.type || '',
+          unit: meta.unit || '',
+          help: meta.help || '',
+          entries: [],
+        };
+        groupsByName.set(familyName, group);
+        this.groups.push(group);
+        return group;
+      };
+
+      let index = 0;
+      const total = parsedEntries.length;
+      const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+      const onComplete = typeof options.onComplete === 'function' ? options.onComplete : () => {};
+      const streaming = Boolean(options.streaming);
+
+      const processEntry = (parsed) => {
+        const entry = this.createEntry(parsed);
+        if (!entry) return;
+        this.flatEntries.push(entry);
+        if (parsed.type === 'metric') {
+          const familyName = getFamilyName(parsed.name);
+          const group = getGroup(familyName, parsed.name);
+          group.entries.push(entry);
+          return;
+        }
+        if (parsed.type === 'comment') {
+          if (isMetaComment(parsed.commentType)) return;
+          this.orphans.push(entry);
+          return;
+        }
+        if (parsed.type === 'warning') {
+          this.orphans.push(entry);
+        }
+      };
+
+      if (!streaming) {
+        for (index = 0; index < total; index += 1) {
+          processEntry(parsedEntries[index]);
+        }
+        this.parsedEntries = [];
+        onComplete();
+        return;
+      }
+
+      const runChunk = (deadline) => {
+        const startTime = performance.now();
+        while (index < total) {
+          processEntry(parsedEntries[index]);
+          index += 1;
+          if (shouldYield(deadline, startTime)) {
+            break;
+          }
+        }
+        if (onProgress) {
+          onProgress(index, total);
+        }
+        if (index < total) {
+          requestIdle(runChunk);
+        } else {
+          this.parsedEntries = [];
+          onComplete();
+        }
+      };
+
+      requestIdle(runChunk);
     }
 
     createEntry(parsed) {
@@ -1107,80 +1426,13 @@
      * @param {string[]} lines - Lines to process.
      */
     processLines(lines) {
-      this.groups = [];
-      this.orphans = [];
-      this.familyMetadata = new Map();
-      this.parsedEntries = [];
-
-      const parsedEntries = [];
+      this.reset();
       lines.forEach((line, index) => {
         const parsed = parsePrometheusLine(line, index + 1);
         if (!parsed) return;
-        parsedEntries.push(parsed);
-        if (parsed.type === 'comment' && isMetaComment(parsed.commentType)) {
-          const existing = this.familyMetadata.get(parsed.metricName) || {};
-          if (parsed.commentType === 'HELP') {
-            existing.help = parsed.text;
-          } else if (parsed.commentType === 'TYPE') {
-            existing.type = parsed.text;
-          } else if (parsed.commentType === 'UNIT') {
-            existing.unit = parsed.text;
-          }
-          this.familyMetadata.set(parsed.metricName, existing);
-        }
+        this.collectParsedEntry(parsed);
       });
-
-      const groupsByName = new Map();
-      const usedIds = new Set();
-
-      const getGroup = (familyName, fallbackName) => {
-        let group = groupsByName.get(familyName);
-        if (group) return group;
-
-        const meta =
-          this.familyMetadata.get(familyName) ||
-          (fallbackName ? this.familyMetadata.get(fallbackName) : null) ||
-          {};
-        group = {
-          name: familyName,
-          id: buildFamilyId(familyName, usedIds),
-          type: meta.type || '',
-          unit: meta.unit || '',
-          help: meta.help || '',
-          entries: [],
-        };
-        groupsByName.set(familyName, group);
-        this.groups.push(group);
-        return group;
-      };
-
-      parsedEntries.forEach((parsed) => {
-        if (parsed.type === 'metric') {
-          const entry = this.createEntry(parsed);
-          if (!entry) return;
-          const familyName = getFamilyName(parsed.name);
-          const group = getGroup(familyName, parsed.name);
-          group.entries.push(entry);
-          return;
-        }
-
-        if (parsed.type === 'comment') {
-          if (isMetaComment(parsed.commentType)) return;
-          const entry = this.createEntry(parsed);
-          if (entry) {
-            this.orphans.push(entry);
-          }
-          return;
-        }
-
-        if (parsed.type === 'warning') {
-          const entry = this.createEntry(parsed);
-          if (entry) {
-            this.orphans.push(entry);
-          }
-        }
-      });
-      this.parsedEntries = parsedEntries;
+      this.buildGroups({ streaming: false });
     }
 
     renderFamilyHtml(family, entriesHtml, options) {
@@ -1190,13 +1442,11 @@
         ? `<div class="pf-family-meta-row"><span class="pf-family-unit">unit: ${escapeHtml(family.unit)}</span></div>`
         : '';
       const headerClass = options.headerMatch ? ' pf-family-header-hit' : '';
-      const openAttr = options.open ? ' open' : '';
       const seriesCount = options.seriesCount;
 
       return `
-        <details class="pf-family" data-family-name="${escapeHtml(family.name)}" id="${family.id}"${openAttr}>
-          <summary class="pf-family-header${headerClass}">
-            <span class="pf-family-toggle" aria-hidden="true">${FAMILY_TOGGLE_SVG}</span>
+        <section class="pf-family" data-family-name="${escapeHtml(family.name)}" id="${family.id}">
+          <div class="pf-family-header${headerClass}">
             <div class="pf-family-header-content">
               <div class="pf-family-title-row">
                 <span class="pf-family-name">${escapeHtml(family.name)}</span>
@@ -1206,11 +1456,11 @@
               </div>
               ${unitHtml}
             </div>
-          </summary>
+          </div>
           <div class="pf-family-body">
             ${entriesHtml}
           </div>
-        </details>
+        </section>
       `;
     }
 
@@ -1291,29 +1541,6 @@
         }
       });
       this.navHandlerAttached = true;
-    }
-
-    attachFamilyToggleHandlers(container) {
-      if (!container) return;
-      const detailsList = container.querySelectorAll('details.pf-family');
-      detailsList.forEach((details) => {
-        details.addEventListener('toggle', () => {
-          const familyName = details.dataset.familyName;
-          if (!familyName) return;
-          this.familyOpenState.set(familyName, details.open);
-          if (this.onFamilyToggle && !this.bulkToggleInProgress) {
-            this.onFamilyToggle();
-          }
-        });
-      });
-    }
-
-    shouldFamilyBeOpen(familyName, hasQuery, hasSampleMatch) {
-      if (hasQuery && hasSampleMatch) {
-        return true;
-      }
-      const stored = this.familyOpenState.get(familyName);
-      return stored !== undefined ? stored : true;
     }
 
     updateSidebarToggleButton() {
@@ -1446,48 +1673,12 @@
       this.resizeHandlerAttached = true;
     }
 
-    getAllFamiliesOpenState() {
-      const container = document.getElementById('pf-metrics-container');
-      if (!container) return 'none';
-      const detailsList = container.querySelectorAll('details.pf-family');
-      if (!detailsList.length) return 'none';
-      let openCount = 0;
-      detailsList.forEach((details) => {
-        if (details.open) {
-          openCount += 1;
-        }
-      });
-      if (openCount === 0) return 'all-closed';
-      if (openCount === detailsList.length) return 'all-open';
-      return 'mixed';
-    }
-
-    setAllFamiliesOpen(open) {
-      const nextOpen = Boolean(open);
-      this.groups.forEach((family) => {
-        this.familyOpenState.set(family.name, nextOpen);
-      });
-
-      const container = document.getElementById('pf-metrics-container');
-      if (!container) return;
-      const detailsList = container.querySelectorAll('details.pf-family');
-      if (!detailsList.length) return;
-
-      this.bulkToggleInProgress = true;
-      detailsList.forEach((details) => {
-        details.open = nextOpen;
-      });
-      this.bulkToggleInProgress = false;
-      if (this.onFamilyToggle) {
-        this.onFamilyToggle();
-      }
-    }
-
     /**
      * Render entries into HTML and insert into the page.
      * @param {string} query - Current search query.
      */
     renderEntries(query) {
+      this.lastQuery = query;
       const container = document.getElementById('pf-metrics-container');
       const navContainer = document.getElementById('pf-family-nav');
       if (!container || !navContainer) return;
@@ -1525,10 +1716,8 @@
           })
           .join('\n');
 
-        const open = this.shouldFamilyBeOpen(family.name, hasQuery, hasSampleMatch);
         familiesHtml.push(
           this.renderFamilyHtml(family, entriesHtml, {
-            open,
             headerMatch,
             seriesCount: family.entries.length,
           })
@@ -1550,7 +1739,6 @@
 
       container.innerHTML = sections.join('\n');
       this.renderNavList(navContainer, familiesForNav, { hasQuery });
-      this.attachFamilyToggleHandlers(container);
       this.attachNavHandlers(navContainer);
       this.attachSidebarHandlers();
       this.attachResizeHandler();
@@ -1562,14 +1750,22 @@
     renderFlatEntries() {
       const container = document.getElementById('pf-flat-container');
       if (!container) return;
-      const entriesHtml = this.parsedEntries
-        .map((parsed) => {
-          const entry = this.createEntry(parsed);
-          return entry ? entry.getHtml() : '';
-        })
-        .filter(Boolean)
-        .join('\n');
-      container.innerHTML = entriesHtml || '<div class="pf-empty">No metrics found.</div>';
+      if (!this.flatVirtualList) {
+        this.flatVirtualList = new VirtualizedList(container, {
+          rowHeight: this.virtualRowHeight,
+          overscan: this.virtualOverscan,
+          renderRow: (row, entry) => {
+            if (!entry) {
+              row.innerHTML = '';
+              return;
+            }
+            row.innerHTML = entry.getHtml();
+            const raw = entry.raw || entry.message || '';
+            row.title = raw;
+          },
+        });
+      }
+      this.flatVirtualList.setItems(this.flatEntries);
     }
   }
 
@@ -1578,6 +1774,7 @@
       this.currentTheme = currentTheme;
       this.browserAPI = browserAPI;
       this.onSearch = typeof handlers.onSearch === 'function' ? handlers.onSearch : () => {};
+      this.onViewModeChange = typeof handlers.onViewModeChange === 'function' ? handlers.onViewModeChange : () => {};
       this.searchBarVisible = false;
       this.searchContainer = null;
       this.searchButton = null;
@@ -1658,7 +1855,7 @@
       this.updateViewToggleButtons();
     }
 
-    setViewMode(mode) {
+    setViewMode(mode, options = {}) {
       const nextMode = mode === 'raw' ? 'raw' : mode === 'flat' ? 'flat' : 'formatted';
       this.viewMode = nextMode;
       const root = document.getElementById('pf-root');
@@ -1667,9 +1864,11 @@
         root.classList.toggle('pf-view-flat', nextMode === 'flat');
       }
       this.updateViewToggleButtons();
-      if (this.browserAPI?.storage?.local) {
+      const shouldPersist = options.persist !== false;
+      if (shouldPersist && this.browserAPI?.storage?.local) {
         this.browserAPI.storage.local.set({ viewMode: nextMode });
       }
+      this.onViewModeChange(nextMode);
     }
 
     updateViewToggleButtons() {
@@ -1876,6 +2075,56 @@
     }
   }
 
+  const showSizeWarning = (contentSize, maxSize) => {
+    if (document.getElementById('pf-size-warning')) return;
+    const warning = document.createElement('div');
+    warning.id = 'pf-size-warning';
+    warning.textContent = `Prometheus Formatter skipped: payload ${formatBytes(contentSize)} exceeds limit ${formatBytes(
+      maxSize
+    )}. Adjust maxPayloadBytes to increase this limit.`;
+    warning.style.cssText =
+      'position: sticky; top: 0; z-index: 2147483647; padding: 0.6em 1em; background: #fff4e5; color: #7a4b00; ' +
+      'border-bottom: 1px solid #f0c36d; font-family: Menlo, Consolas, DejaVu Sans Mono, monospace; font-size: 13px;';
+    document.body.prepend(warning);
+  };
+
+  const startStreamingParse = (rawText, metricsHandler, options = {}) => {
+    const totalLength = rawText.length;
+    let index = 0;
+    let lineNumber = 0;
+    const onComplete = typeof options.onComplete === 'function' ? options.onComplete : () => {};
+
+    const runChunk = (deadline) => {
+      const startTime = performance.now();
+      while (index < totalLength) {
+        const nextNewline = rawText.indexOf('\n', index);
+        let line = '';
+        if (nextNewline === -1) {
+          line = rawText.slice(index);
+          index = totalLength;
+        } else {
+          line = rawText.slice(index, nextNewline);
+          index = nextNewline + 1;
+        }
+        lineNumber += 1;
+        const parsed = parsePrometheusLine(line, lineNumber);
+        if (parsed) {
+          metricsHandler.collectParsedEntry(parsed);
+        }
+        if (shouldYield(deadline, startTime)) {
+          break;
+        }
+      }
+      if (index < totalLength) {
+        requestIdle(runChunk);
+      } else {
+        onComplete();
+      }
+    };
+
+    requestIdle(runChunk);
+  };
+
   /**
    * Determines if the page contains Prometheus metrics.
    * @returns {boolean} - True if the page is a Prometheus metrics endpoint.
@@ -1887,9 +2136,11 @@
     }
 
     if (contentType.startsWith('text/plain') || contentType === '') {
-      const bodyText = document.body.textContent.trim();
+      const rawText = document.body.textContent || '';
+      const bodyText = rawText.trim();
       if (!bodyText) return false;
-      const lines = bodyText.split('\n');
+      const sampleText = bodyText.slice(0, 200000);
+      const lines = sampleText.split('\n');
       let metricLines = 0;
       let metadataLines = 0;
       let inspected = 0;
@@ -1931,88 +2182,120 @@
     const bodyText = rawText.trim();
     if (!bodyText) return;
 
-    const MAX_SIZE_BYTES = 32 * 1024 * 1024; // 32 MB
     const contentSize = new Blob([rawText]).size;
-
-    if (contentSize > MAX_SIZE_BYTES) {
-      console.warn('Content size exceeds 32 MB. Skipping processing.');
-      return;
+    const rootElement = document.documentElement;
+    const previousVisibility = rootElement ? rootElement.style.visibility : '';
+    const restoreVisibility = () => {
+      if (rootElement) {
+        rootElement.style.visibility = previousVisibility;
+      }
+    };
+    if (rootElement) {
+      rootElement.style.visibility = 'hidden';
     }
 
-    document.body.innerHTML = '';
+    const applyPreferences = (result = {}) => {
+      const settings = resolveSettings(result);
+      if (contentSize > settings.maxPayloadBytes) {
+        restoreVisibility();
+        showSizeWarning(contentSize, settings.maxPayloadBytes);
+        return;
+      }
 
-    const container = document.createElement('div');
-    container.id = 'pf-root';
+      document.body.innerHTML = '';
 
-    const contentContainer = document.createElement('div');
-    contentContainer.classList.add('pf-container', 'pf-content');
+      const container = document.createElement('div');
+      container.id = 'pf-root';
 
-    const layout = document.createElement('div');
-    layout.classList.add('pf-layout');
+      const contentContainer = document.createElement('div');
+      contentContainer.classList.add('pf-container', 'pf-content');
 
-    const sidebar = document.createElement('div');
-    sidebar.id = 'pf-sidebar';
-    sidebar.classList.add('pf-sidebar');
+      const layout = document.createElement('div');
+      layout.classList.add('pf-layout');
 
-    const navContainer = document.createElement('div');
-    navContainer.id = 'pf-family-nav';
+      const sidebar = document.createElement('div');
+      sidebar.id = 'pf-sidebar';
+      sidebar.classList.add('pf-sidebar');
 
-    const resizer = document.createElement('div');
-    resizer.classList.add('pf-sidebar-resizer');
+      const navContainer = document.createElement('div');
+      navContainer.id = 'pf-family-nav';
 
-    const main = document.createElement('div');
-    main.classList.add('pf-main');
+      const resizer = document.createElement('div');
+      resizer.classList.add('pf-sidebar-resizer');
 
-    const mainSearch = document.createElement('div');
-    mainSearch.id = 'pf-main-search';
-    mainSearch.classList.add('pf-main-search');
+      const main = document.createElement('div');
+      main.classList.add('pf-main');
 
-    const metricsContainer = document.createElement('div');
-    metricsContainer.id = 'pf-metrics-container';
+      const mainSearch = document.createElement('div');
+      mainSearch.id = 'pf-main-search';
+      mainSearch.classList.add('pf-main-search');
 
-    const flatContainer = document.createElement('div');
-    flatContainer.id = 'pf-flat-container';
+      const metricsContainer = document.createElement('div');
+      metricsContainer.id = 'pf-metrics-container';
 
-    const rawContainer = document.createElement('pre');
-    rawContainer.id = 'pf-raw-container';
-    rawContainer.classList.add('pf-raw-container');
-    rawContainer.textContent = rawText;
+      const flatContainer = document.createElement('div');
+      flatContainer.id = 'pf-flat-container';
 
-    sidebar.appendChild(navContainer);
-    sidebar.appendChild(resizer);
-    layout.appendChild(sidebar);
-    main.appendChild(mainSearch);
-    main.appendChild(metricsContainer);
-    main.appendChild(flatContainer);
-    main.appendChild(rawContainer);
-    layout.appendChild(main);
-    contentContainer.appendChild(layout);
-    container.appendChild(contentContainer);
-    document.body.appendChild(container);
+      const rawContainer = document.createElement('pre');
+      rawContainer.id = 'pf-raw-container';
+      rawContainer.classList.add('pf-raw-container');
+      rawContainer.dataset.loaded = 'false';
 
-    browserAPI.storage.local.get(['theme', 'sidebarWidth', 'sidebarCollapsed', 'viewMode'], (result) => {
+      sidebar.appendChild(navContainer);
+      sidebar.appendChild(resizer);
+      layout.appendChild(sidebar);
+      main.appendChild(mainSearch);
+      main.appendChild(metricsContainer);
+      main.appendChild(flatContainer);
+      main.appendChild(rawContainer);
+      layout.appendChild(main);
+      contentContainer.appendChild(layout);
+      container.appendChild(contentContainer);
+      document.body.appendChild(container);
+
       const currentTheme = result.theme || 'dark';
       document.documentElement.setAttribute('data-theme', currentTheme);
 
       const metricsHandler = new PrometheusMetricsHandler(browserAPI);
-      const lines = rawText.split('\n');
-      metricsHandler.processLines(lines);
+      metricsHandler.setVirtualizationOptions({
+        rowHeight: settings.virtualRowHeight,
+        overscan: settings.virtualOverscan,
+      });
       metricsHandler.applySidebarPreferences({
         sidebarWidth: result.sidebarWidth,
         sidebarCollapsed: result.sidebarCollapsed,
       });
 
+      const ensureRawContent = () => {
+        if (rawContainer.dataset.loaded === 'true') return;
+        rawContainer.textContent = rawText;
+        rawContainer.dataset.loaded = 'true';
+      };
+
+      let parseReady = false;
+
       const uiManager = new PrometheusUIManager(currentTheme, browserAPI, {
         onSearch: (query) => {
+          if (!parseReady) return;
           metricsHandler.renderEntries(query);
+        },
+        onViewModeChange: (mode) => {
+          if (mode === 'raw') {
+            ensureRawContent();
+            return;
+          }
+          if (!parseReady) return;
+          if (mode === 'flat') {
+            metricsHandler.renderFlatEntries();
+            return;
+          }
+          metricsHandler.renderEntries(metricsHandler.lastQuery || '');
         },
       });
 
       uiManager.injectCSS();
+      restoreVisibility();
       uiManager.injectViewToggleUI();
-      if (result.viewMode) {
-        uiManager.setViewMode(result.viewMode);
-      }
       uiManager.injectSearchUI();
       metricsHandler.setNavRenderHook(() => {
         uiManager.mountSidebarControls();
@@ -2021,11 +2304,48 @@
       metricsHandler.setSidebarToggleHook(() => {
         uiManager.mountSearchBar();
       });
-      metricsHandler.renderEntries('');
-      metricsHandler.renderFlatEntries();
-      uiManager.mountSidebarControls();
-      uiManager.mountSearchBar();
-    });
+
+      const finalizeRender = () => {
+        parseReady = true;
+        const storedViewMode = result.viewMode || 'formatted';
+        const preferFlat = contentSize >= settings.largePayloadBytes && (!result.viewMode || storedViewMode === 'formatted');
+        const userSelectedMode = uiManager.viewMode;
+        const hasUserSelected = userSelectedMode !== 'formatted';
+        const defaultViewMode = preferFlat ? 'flat' : storedViewMode;
+        const initialViewMode = hasUserSelected ? userSelectedMode : defaultViewMode;
+        uiManager.setViewMode(initialViewMode, { persist: !preferFlat && !hasUserSelected });
+
+        uiManager.mountSidebarControls();
+        uiManager.mountSearchBar();
+      };
+
+      startStreamingParse(rawText, metricsHandler, {
+        onComplete: () => {
+          metricsHandler.buildGroups({
+            streaming: true,
+            onComplete: finalizeRender,
+          });
+        },
+      });
+    };
+
+    if (browserAPI?.storage?.local) {
+      browserAPI.storage.local.get(
+        [
+          'theme',
+          'sidebarWidth',
+          'sidebarCollapsed',
+          'viewMode',
+          'maxPayloadBytes',
+          'largePayloadBytes',
+          'virtualRowHeight',
+          'virtualOverscan',
+        ],
+        applyPreferences
+      );
+    } else {
+      applyPreferences({});
+    }
   };
 
    if (document.readyState !== 'loading') {
