@@ -29,10 +29,6 @@ analyzing metrics, Prometheus Formatter provides a cleaner and more intuitive vi
 - **View Toggle**: Formatted, Flat, and Raw views with virtualized rendering for large endpoints.
 - **Expanded Themes**: Theme menu with 14 palettes across light and dark variants.
 
-### Dark Mode
+### Preview
 
-![Dark Mode Screenshot](/etc/prometheus-formatter-dark-mode.png)
-
-### Light Mode
-
-![Light Mode Screenshot](/etc/prometheus-formatter-light-mode.png) 
+![Prometheus Formatter Preview](/etc/prometheus-formatter.gif)
