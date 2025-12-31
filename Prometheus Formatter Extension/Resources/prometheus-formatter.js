@@ -182,6 +182,34 @@
     return String(query).trim().toLowerCase();
   };
 
+  const escapeRegExp = (value) => {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  const highlightRawText = (text, query) => {
+    if (!query) return escapeHtml(text);
+    const escapedQuery = escapeRegExp(query);
+    if (!escapedQuery) return escapeHtml(text);
+    const regex = new RegExp(escapedQuery, 'gi');
+    let result = '';
+    let lastIndex = 0;
+    let match = regex.exec(text);
+    while (match) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (start > lastIndex) {
+        result += escapeHtml(text.slice(lastIndex, start));
+      }
+      result += `<mark class="pf-raw-search-hit">${escapeHtml(text.slice(start, end))}</mark>`;
+      lastIndex = end;
+      match = regex.exec(text);
+    }
+    if (lastIndex < text.length) {
+      result += escapeHtml(text.slice(lastIndex));
+    }
+    return result;
+  };
+
   const isMetaComment = (commentType) => META_COMMENT_TYPES.has(commentType);
 
   const matchesText = (value, query) => {
@@ -395,15 +423,6 @@
         }
       }
     }
-
-    destroy() {
-      if (!this.container) return;
-      this.container.removeEventListener('scroll', this.onScroll);
-      window.removeEventListener('resize', this.onResize);
-      this.container = null;
-      this.items = [];
-      this.pool = [];
-    }
   }
 
   class PrometheusMetricsHandler {
@@ -418,6 +437,7 @@
       this.virtualRowHeight = DEFAULT_VIRTUAL_ROW_HEIGHT;
       this.virtualOverscan = DEFAULT_VIRTUAL_OVERSCAN;
       this.lastQuery = '';
+      this.flatQuery = '';
       this.navHandlerAttached = false;
       this.sidebarHandlerAttached = false;
       this.resizeHandlerAttached = false;
@@ -426,15 +446,6 @@
       this.onNavRender = null;
       this.onSidebarToggle = null;
     }
-
-    reset() {
-      this.groups = [];
-      this.orphans = [];
-      this.familyMetadata = new Map();
-      this.parsedEntries = [];
-      this.flatEntries = [];
-    }
-
     setVirtualizationOptions(options = {}) {
       if (Number.isFinite(options.rowHeight) && options.rowHeight > 0) {
         this.virtualRowHeight = options.rowHeight;
@@ -593,21 +604,6 @@
 
       return null;
     }
-
-    /**
-     * Process an array of lines and populate families and metadata.
-     * @param {string[]} lines - Lines to process.
-     */
-    processLines(lines) {
-      this.reset();
-      lines.forEach((line, index) => {
-        const parsed = parsePrometheusLine(line, index + 1);
-        if (!parsed) return;
-        this.collectParsedEntry(parsed);
-      });
-      this.buildGroups({ streaming: false });
-    }
-
     renderFamilyHtml(family, entriesHtml, options) {
       const typeLabel = family.type ? family.type : 'unknown';
       const helpText = family.help && family.help.trim() ? escapeHtml(family.help) : 'No HELP provided';
@@ -920,9 +916,20 @@
       }
     }
 
-    renderFlatEntries() {
+    renderFlatEntries(query = '') {
+      this.lastQuery = query;
+      this.flatQuery = normalizeQuery(query);
       const container = document.getElementById('pf-flat-container');
       if (!container) return;
+      const hasQuery = this.flatQuery.length > 0;
+      const filteredEntries = hasQuery
+        ? this.flatEntries.filter((entry) => {
+            if (entry.type === 'metric') {
+              return matchesMetricEntry(entry, this.flatQuery);
+            }
+            return matchesOrphanEntry(entry, this.flatQuery);
+          })
+        : this.flatEntries;
       if (!this.flatVirtualList) {
         this.flatVirtualList = new VirtualizedList(container, {
           rowHeight: this.virtualRowHeight,
@@ -932,13 +939,16 @@
               row.innerHTML = '';
               return;
             }
-            row.innerHTML = entry.getHtml();
-            const raw = entry.raw || entry.message || '';
-            row.title = raw;
+            const highlight = this.flatQuery.length > 0 && entry.type === 'metric';
+            row.innerHTML = entry.getHtml({ highlight });
+            row.title = entry.raw || entry.message || '';
           },
         });
       }
-      this.flatVirtualList.setItems(this.flatEntries);
+      if (this.flatVirtualList.emptyState) {
+        this.flatVirtualList.emptyState.textContent = hasQuery ? 'No matching metrics found.' : 'No metrics found.';
+      }
+      this.flatVirtualList.setItems(filteredEntries);
     }
   }
 
@@ -1094,6 +1104,8 @@
         root.classList.toggle('pf-view-flat', nextMode === 'flat');
       }
       this.updateViewToggleButtons();
+      this.mountSearchControls();
+      this.mountSearchBar();
       const shouldPersist = options.persist !== false;
       if (shouldPersist && this.browserAPI?.storage?.local) {
         this.browserAPI.storage.local.set({ viewMode: nextMode });
@@ -1141,14 +1153,14 @@
 
       searchInput.addEventListener('input', (e) => {
         const value = e.target.value;
-        this.onSearch(value);
+        this.onSearch(value, this.viewMode);
         searchContainer.classList.toggle('has-value', value.length > 0);
       });
 
       clearButton.addEventListener('click', () => {
         searchInput.value = '';
         searchContainer.classList.remove('has-value');
-        this.onSearch('');
+        this.onSearch('', this.viewMode);
         searchInput.focus();
       });
 
@@ -1243,11 +1255,37 @@
       return menu;
     }
 
-    mountSidebarControls() {
-      const container = document.querySelector('.pf-sidebar-controls');
-      if (!container) return;
+    resolveSearchButtonContainer() {
+      if (this.viewMode === 'raw' || this.viewMode === 'flat') {
+        return this.getTopControlsContainer();
+      }
+      const sidebar = document.getElementById('pf-sidebar');
+      if (!sidebar) return null;
+      const style = window.getComputedStyle(sidebar);
+      if (style.display === 'none') {
+        return this.getTopControlsContainer();
+      }
+      return document.querySelector('.pf-sidebar-controls');
+    }
+
+    mountSearchControls() {
       this.ensureSidebarButtons();
-      if (this.searchButton && this.searchButton.parentElement !== container) {
+      if (!this.searchButton) return;
+      const container = this.resolveSearchButtonContainer();
+      if (!container) {
+        if (this.searchButton.parentElement) {
+          this.searchButton.parentElement.removeChild(this.searchButton);
+        }
+        return;
+      }
+      if (container.id === 'pf-top-controls') {
+        const themeControls = document.getElementById('pf-theme-controls');
+        if (themeControls && themeControls.parentElement === container) {
+          container.insertBefore(this.searchButton, themeControls);
+          return;
+        }
+      }
+      if (this.searchButton.parentElement !== container) {
         container.appendChild(this.searchButton);
       }
     }
@@ -1562,27 +1600,46 @@
         sidebarCollapsed: result.sidebarCollapsed,
       });
 
-      const ensureRawContent = () => {
-        if (rawContainer.dataset.loaded === 'true') return;
+      const ensureRawContent = (force = false) => {
+        if (!force && rawContainer.dataset.loaded === 'true') return;
         rawContainer.textContent = rawText;
+        rawContainer.dataset.loaded = 'true';
+      };
+
+      const updateRawSearch = (query) => {
+        const normalizedQuery = normalizeQuery(query);
+        if (!normalizedQuery) {
+          ensureRawContent(true);
+          return;
+        }
+        rawContainer.innerHTML = highlightRawText(rawText, normalizedQuery);
         rawContainer.dataset.loaded = 'true';
       };
 
       let parseReady = false;
 
       const uiManager = new PrometheusUIManager(currentTheme, browserAPI, {
-        onSearch: (query) => {
+        onSearch: (query, viewMode) => {
+          if (viewMode === 'raw') {
+            metricsHandler.lastQuery = query;
+            updateRawSearch(query);
+            return;
+          }
           if (!parseReady) return;
+          if (viewMode === 'flat') {
+            metricsHandler.renderFlatEntries(query);
+            return;
+          }
           metricsHandler.renderEntries(query);
         },
         onViewModeChange: (mode) => {
           if (mode === 'raw') {
-            ensureRawContent();
+            updateRawSearch(metricsHandler.lastQuery || '');
             return;
           }
           if (!parseReady) return;
           if (mode === 'flat') {
-            metricsHandler.renderFlatEntries();
+            metricsHandler.renderFlatEntries(metricsHandler.lastQuery || '');
             return;
           }
           metricsHandler.renderEntries(metricsHandler.lastQuery || '');
@@ -1594,10 +1651,11 @@
       uiManager.injectViewToggleUI();
       uiManager.injectSearchUI();
       metricsHandler.setNavRenderHook(() => {
-        uiManager.mountSidebarControls();
+        uiManager.mountSearchControls();
         uiManager.mountSearchBar();
       });
       metricsHandler.setSidebarToggleHook(() => {
+        uiManager.mountSearchControls();
         uiManager.mountSearchBar();
       });
 
@@ -1611,7 +1669,7 @@
         const initialViewMode = hasUserSelected ? userSelectedMode : defaultViewMode;
         uiManager.setViewMode(initialViewMode, { persist: !preferFlat && !hasUserSelected });
 
-        uiManager.mountSidebarControls();
+        uiManager.mountSearchControls();
         uiManager.mountSearchBar();
       };
 
