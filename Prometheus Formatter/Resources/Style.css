@@ -1,6 +1,7 @@
 * {
 	-webkit-user-select: none;
 	-webkit-user-drag: none;
+	user-select: none;
 	cursor: default;
 }
 
@@ -53,9 +54,15 @@ img {
 }
 
 @keyframes float {
-	0% { transform: translatey(0px); }
-	50% { transform: translatey(-10px); }
-	100% { transform: translatey(0px); }
+	0% { transform: translateY(0px); }
+	50% { transform: translateY(-10px); }
+	100% { transform: translateY(0px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	img {
+		animation: none;
+	}
 }
 
 @media (prefers-color-scheme: dark) {

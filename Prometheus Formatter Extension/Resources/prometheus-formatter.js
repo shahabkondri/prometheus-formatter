@@ -1,46 +1,37 @@
 (() => {
-   const browserAPI = typeof window.browser !== 'undefined' ? window.browser : window.chrome;
-   if (!browserAPI) {
-     console.error('Browser API is not available');
-     return;
-   }
+  const root = typeof globalThis !== 'undefined' ? globalThis : window;
+  const browserAPI = root.browser ?? root.chrome;
+  if (!browserAPI) {
+    console.error('Browser API is not available');
+    return;
+  }
 
-   const root = typeof globalThis !== 'undefined' ? globalThis : window;
-   const parser = root.PrometheusFormatterParser;
-   if (!parser) {
-     console.error('Prometheus parser is not available');
-     return;
-   }
+  const parser = root.PrometheusFormatterParser;
+  if (!parser) {
+    console.error('Prometheus parser is not available');
+    return;
+  }
 
-   const { parsePrometheusLine, classifyPrometheusLine } = parser;
+  const { parsePrometheusLine, classifyPrometheusLine } = parser;
 
-   const escapeHtml = (value) => {
-     return String(value).replace(/[&<>"']/g, (match) => {
-       switch (match) {
-         case '&':
-           return '&amp;';
-         case '<':
-           return '&lt;';
-         case '>':
-           return '&gt;';
-         case '"':
-           return '&quot;';
-         case '\'':
-           return '&#39;';
-         default:
-           return match;
-       }
-     });
-   };
+  const HTML_ESCAPE_MAP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
 
-   const formatLabelValue = (value) => {
-     return String(value)
-       .replace(/\\/g, '\\\\')
-       .replace(/\n/g, '\\n')
-       .replace(/\r/g, '\\r')
-       .replace(/\t/g, '\\t')
-       .replace(/"/g, '\\"');
-   };
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (match) => HTML_ESCAPE_MAP[match]);
+
+  const formatLabelValue = (value) => {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+      .replace(/"/g, '\\"');
+  };
 
   const DEFAULT_MAX_SIZE_BYTES = 32 * 1024 * 1024;
   const DEFAULT_LARGE_PAYLOAD_BYTES = 6 * 1024 * 1024;
@@ -48,6 +39,8 @@
   const DEFAULT_VIRTUAL_OVERSCAN = 8;
   const IDLE_TIMEOUT_MS = 100;
   const CHUNK_TIME_SLICE_MS = 12;
+  const SAMPLE_SIZE_LIMIT = 200000;
+  const MAX_INSPECTED_LINES = 200;
 
   const FAMILY_SUFFIXES = ['_bucket', '_sum', '_count'];
   const META_COMMENT_TYPES = new Set(['HELP', 'TYPE', 'UNIT']);
@@ -66,6 +59,17 @@
     '<path d="M18 6 6 18"></path>' +
     '<path d="M6 6 18 18"></path>' +
     '</svg>';
+  const SIZE_WARNING_STYLE = [
+    'position: sticky',
+    'top: 0',
+    'z-index: 2147483647',
+    'padding: 0.6em 1em',
+    'background: #fff4e5',
+    'color: #7a4b00',
+    'border-bottom: 1px solid #f0c36d',
+    'font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco, "Courier New", monospace',
+    'font-size: 13px',
+  ].join('; ');
   const BASE_STYLE_ID = 'prometheus-formatter-base-style';
   const THEME_STYLE_ID = 'prometheus-formatter-theme-style';
   const BASE_STYLE_PATH = 'prometheus-formatter-base.css';
@@ -117,16 +121,16 @@
     return `${current.toFixed(current >= 10 ? 0 : 1)} ${units[index]}`;
   };
 
-  const normalizeNumberSetting = (value, fallback) => {
+  const normalizeNumberSetting = (value, fallback, { min = 1 } = {}) => {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= 0) {
+    if (!Number.isFinite(numeric) || numeric < min) {
       return fallback;
     }
     return numeric;
   };
 
   const resolveSettings = (stored = {}) => {
-    const rootSettings = root.PrometheusFormatterSettings || {};
+    const rootSettings = root.PrometheusFormatterSettings ?? {};
     const maxPayloadBytes = normalizeNumberSetting(
       rootSettings.maxPayloadBytes,
       normalizeNumberSetting(stored.maxPayloadBytes, DEFAULT_MAX_SIZE_BYTES)
@@ -141,7 +145,8 @@
     );
     const virtualOverscan = normalizeNumberSetting(
       rootSettings.virtualOverscan,
-      normalizeNumberSetting(stored.virtualOverscan, DEFAULT_VIRTUAL_OVERSCAN)
+      normalizeNumberSetting(stored.virtualOverscan, DEFAULT_VIRTUAL_OVERSCAN, { min: 0 }),
+      { min: 0 }
     );
 
     return {
@@ -217,25 +222,21 @@
     return String(value).toLowerCase().includes(query);
   };
 
+  const matchesLabelSet = (labels, query) =>
+    Boolean(labels?.some(({ key, value }) => matchesText(key, query) || matchesText(value, query)));
+
   const matchesMetricEntry = (entry, query) => {
     if (!query) return false;
-    if (matchesText(entry.name, query)) return true;
-    if (matchesText(entry.value, query)) return true;
-    if (matchesText(entry.timestamp, query)) return true;
-    if (entry.labels && entry.labels.some(({ key, value }) => matchesText(key, query) || matchesText(value, query))) {
+    if (matchesText(entry.name, query) || matchesText(entry.value, query) || matchesText(entry.timestamp, query)) {
       return true;
     }
-    if (entry.exemplar) {
-      if (matchesText(entry.exemplar.value, query)) return true;
-      if (matchesText(entry.exemplar.timestamp, query)) return true;
-      if (
-        entry.exemplar.labels &&
-        entry.exemplar.labels.some(({ key, value }) => matchesText(key, query) || matchesText(value, query))
-      ) {
-        return true;
-      }
-    }
-    return false;
+    if (matchesLabelSet(entry.labels, query)) return true;
+    if (!entry.exemplar) return false;
+    return (
+      matchesText(entry.exemplar.value, query) ||
+      matchesText(entry.exemplar.timestamp, query) ||
+      matchesLabelSet(entry.exemplar.labels, query)
+    );
   };
 
   const matchesFamilyMeta = (family, query) => {
@@ -259,7 +260,7 @@
     return false;
   };
 
-  const buildFamilyId = (name, usedIds) => {
+  const createFamilyId = (name, usedIds) => {
     const base = `pf-family-${name.replace(/[^a-zA-Z0-9_]/g, '-')}`;
     let id = base;
     let index = 1;
@@ -488,7 +489,7 @@
       }
     }
 
-    buildGroups(options = {}) {
+    buildMetricGroups(options = {}) {
       this.groups = [];
       this.orphans = [];
       this.flatEntries = [];
@@ -505,7 +506,7 @@
           {};
         group = {
           name: familyName,
-          id: buildFamilyId(familyName, usedIds),
+          id: createFamilyId(familyName, usedIds),
           type: meta.type || '',
           unit: meta.unit || '',
           help: meta.help || '',
@@ -605,8 +606,8 @@
       return null;
     }
     renderFamilyHtml(family, entriesHtml, options) {
-      const typeLabel = family.type ? family.type : 'unknown';
-      const helpText = family.help && family.help.trim() ? escapeHtml(family.help) : 'No HELP provided';
+      const typeLabel = family.type || 'unknown';
+      const helpText = family.help?.trim() ? escapeHtml(family.help) : 'No HELP provided';
       const unitHtml = family.unit
         ? `<div class="pf-family-meta-row"><span class="pf-family-unit">unit: ${escapeHtml(family.unit)}</span></div>`
         : '';
@@ -633,10 +634,10 @@
       `;
     }
 
-    renderNavList(navContainer, families, options = {}) {
+    renderFamilyNavList(navContainer, families, options = {}) {
       if (!navContainer) return;
       const hasQuery = Boolean(options.hasQuery);
-      const sidebar = document.getElementById('pf-sidebar');
+      const sidebar = this.getSidebarElement();
 
       if (navContainer.dataset.initialized !== 'true') {
         navContainer.innerHTML = `
@@ -712,6 +713,17 @@
       this.navHandlerAttached = true;
     }
 
+    getSidebarElement() {
+      return document.getElementById('pf-sidebar');
+    }
+
+    applySidebarStyles() {
+      const sidebar = this.getSidebarElement();
+      if (!sidebar) return;
+      sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
+      sidebar.style.width = this.sidebarCollapsed ? '' : `${this.sidebarWidth}px`;
+    }
+
     updateSidebarToggleButton() {
       const navContainer = document.getElementById('pf-family-nav');
       if (!navContainer) return;
@@ -727,7 +739,7 @@
     updateSidebarOffset() {
       const rootElement = document.documentElement;
       if (!rootElement) return;
-      const sidebar = document.getElementById('pf-sidebar');
+      const sidebar = this.getSidebarElement();
       let width = 0;
       if (sidebar && !sidebar.classList.contains('pf-sidebar-empty')) {
         const style = window.getComputedStyle(sidebar);
@@ -741,15 +753,7 @@
 
     setSidebarCollapsed(collapsed) {
       this.sidebarCollapsed = Boolean(collapsed);
-      const sidebar = document.getElementById('pf-sidebar');
-      if (sidebar) {
-        sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
-        if (this.sidebarCollapsed) {
-          sidebar.style.width = '';
-        } else {
-          sidebar.style.width = `${this.sidebarWidth}px`;
-        }
-      }
+      this.applySidebarStyles();
       if (this.browserAPI?.storage?.local) {
         this.browserAPI.storage.local.set({ sidebarCollapsed: this.sidebarCollapsed });
       }
@@ -762,10 +766,7 @@
 
     setSidebarWidth(width, persist) {
       this.sidebarWidth = clampSidebarWidth(width);
-      const sidebar = document.getElementById('pf-sidebar');
-      if (sidebar && !this.sidebarCollapsed) {
-        sidebar.style.width = `${this.sidebarWidth}px`;
-      }
+      this.applySidebarStyles();
       if (persist && this.browserAPI?.storage?.local) {
         this.browserAPI.storage.local.set({ sidebarWidth: this.sidebarWidth });
       }
@@ -779,15 +780,7 @@
       if (typeof preferences.sidebarCollapsed === 'boolean') {
         this.sidebarCollapsed = preferences.sidebarCollapsed;
       }
-      const sidebar = document.getElementById('pf-sidebar');
-      if (sidebar) {
-        sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
-        if (this.sidebarCollapsed) {
-          sidebar.style.width = '';
-        } else {
-          sidebar.style.width = `${this.sidebarWidth}px`;
-        }
-      }
+      this.applySidebarStyles();
       this.updateSidebarToggleButton();
       this.updateSidebarOffset();
       if (this.onSidebarToggle) {
@@ -797,7 +790,7 @@
 
     attachSidebarHandlers() {
       if (this.sidebarHandlerAttached) return;
-      const sidebar = document.getElementById('pf-sidebar');
+      const sidebar = this.getSidebarElement();
       if (!sidebar) return;
       const resizer = sidebar.querySelector('.pf-sidebar-resizer');
       if (!resizer) return;
@@ -843,10 +836,10 @@
     }
 
     /**
-     * Render entries into HTML and insert into the page.
+     * Render grouped entries into HTML and insert into the page.
      * @param {string} query - Current search query.
      */
-    renderEntries(query) {
+    renderGroupedEntries(query) {
       this.lastQuery = query;
       const container = document.getElementById('pf-metrics-container');
       const navContainer = document.getElementById('pf-family-nav');
@@ -855,34 +848,25 @@
       const normalizedQuery = normalizeQuery(query);
       const hasQuery = normalizedQuery.length > 0;
 
-      const filteredOrphans = this.orphans.filter((entry) => matchesOrphanEntry(entry, normalizedQuery));
+      const filteredOrphans = hasQuery
+        ? this.orphans.filter((entry) => matchesOrphanEntry(entry, normalizedQuery))
+        : this.orphans;
       const familiesForNav = [];
       const familiesHtml = [];
 
       this.groups.forEach((family) => {
-        const headerMatch = hasQuery ? matchesFamilyMeta(family, normalizedQuery) : false;
+        const headerMatch = hasQuery && matchesFamilyMeta(family, normalizedQuery);
+        const matchFlags = hasQuery
+          ? family.entries.map((entry) => matchesMetricEntry(entry, normalizedQuery))
+          : [];
+        const hasSampleMatch = hasQuery && matchFlags.some(Boolean);
 
-        let matchFlags = [];
-        let hasSampleMatch = false;
-        if (hasQuery) {
-          matchFlags = family.entries.map((entry) => {
-            const matched = matchesMetricEntry(entry, normalizedQuery);
-            if (matched) {
-              hasSampleMatch = true;
-            }
-            return matched;
-          });
-
-          if (!hasSampleMatch && !headerMatch) {
-            return;
-          }
+        if (hasQuery && !hasSampleMatch && !headerMatch) {
+          return;
         }
 
         const entriesHtml = family.entries
-          .map((entry, index) => {
-            const highlight = hasQuery ? matchFlags[index] : false;
-            return entry.getHtml({ highlight });
-          })
+          .map((entry, index) => entry.getHtml({ highlight: hasQuery && matchFlags[index] }))
           .join('\n');
 
         familiesHtml.push(
@@ -907,7 +891,7 @@
       }
 
       container.innerHTML = sections.join('\n');
-      this.renderNavList(navContainer, familiesForNav, { hasQuery });
+      this.renderFamilyNavList(navContainer, familiesForNav, { hasQuery });
       this.attachNavHandlers(navContainer);
       this.attachSidebarHandlers();
       this.attachResizeHandler();
@@ -1049,7 +1033,7 @@
       return container;
     }
 
-    injectViewToggleUI() {
+    initializeViewToggleUI() {
       if (this.viewToggleInitialized) return;
       const viewContainer = document.createElement('div');
       viewContainer.id = 'pf-view-controls';
@@ -1131,8 +1115,7 @@
       }
     }
 
-
-    injectSearchUI() {
+    initializeSearchUI() {
       const searchContainer = document.createElement('div');
       searchContainer.classList.add('pf-search-container');
       this.searchContainer = searchContainer;
@@ -1168,11 +1151,11 @@
       searchField.appendChild(clearButton);
       searchContainer.appendChild(searchField);
 
-      this.ensureSidebarButtons();
+      this.ensureSearchButton();
       this.mountThemeControls();
     }
 
-    ensureSidebarButtons() {
+    ensureSearchButton() {
       if (this.searchButton) {
         return;
       }
@@ -1269,7 +1252,7 @@
     }
 
     mountSearchControls() {
-      this.ensureSidebarButtons();
+      this.ensureSearchButton();
       if (!this.searchButton) return;
       const container = this.resolveSearchButtonContainer();
       if (!container) {
@@ -1363,28 +1346,40 @@
       });
     }
 
+    setThemeMenuOpen(isOpen) {
+      if (!this.themeMenu || !this.themeButton) return;
+      this.themeMenuOpen = isOpen;
+      this.themeMenu.classList.toggle('open', isOpen);
+      this.themeMenu.setAttribute('aria-hidden', String(!isOpen));
+      this.themeButton.setAttribute('aria-expanded', String(isOpen));
+    }
+
     toggleThemeMenu() {
-      if (this.themeMenuOpen) {
-        this.closeThemeMenu();
-        return;
-      }
-      this.openThemeMenu();
+      this.setThemeMenuOpen(!this.themeMenuOpen);
     }
 
     openThemeMenu() {
-      if (!this.themeMenu || !this.themeButton) return;
-      this.themeMenuOpen = true;
-      this.themeMenu.classList.add('open');
-      this.themeMenu.setAttribute('aria-hidden', 'false');
-      this.themeButton.setAttribute('aria-expanded', 'true');
+      this.setThemeMenuOpen(true);
     }
 
     closeThemeMenu() {
-      if (!this.themeMenu || !this.themeButton) return;
-      this.themeMenuOpen = false;
-      this.themeMenu.classList.remove('open');
-      this.themeMenu.setAttribute('aria-hidden', 'true');
-      this.themeButton.setAttribute('aria-expanded', 'false');
+      this.setThemeMenuOpen(false);
+    }
+
+    setSearchBarVisible(visible) {
+      if (!this.searchContainer) return;
+      this.searchBarVisible = visible;
+      const searchContainer = this.searchContainer;
+      if (!visible) {
+        searchContainer.classList.remove('active', 'has-value');
+        return;
+      }
+      searchContainer.classList.add('active');
+      const searchInput = searchContainer.querySelector('#pf-search-input');
+      if (searchInput) {
+        searchContainer.classList.toggle('has-value', searchInput.value.length > 0);
+        searchInput.focus();
+      }
     }
 
     /**
@@ -1393,20 +1388,7 @@
     toggleSearchBar() {
       if (!this.searchContainer) return;
       this.mountSearchBar();
-      const searchContainer = this.searchContainer;
-      if (this.searchBarVisible) {
-        searchContainer.classList.remove('active', 'has-value');
-        this.searchBarVisible = false;
-        return;
-      }
-
-      searchContainer.classList.add('active');
-      this.searchBarVisible = true;
-      const searchInput = searchContainer.querySelector('#pf-search-input');
-      if (searchInput) {
-        searchContainer.classList.toggle('has-value', searchInput.value.length > 0);
-        searchInput.focus();
-      }
+      this.setSearchBarVisible(!this.searchBarVisible);
     }
   }
 
@@ -1417,13 +1399,11 @@
     warning.textContent = `Prometheus Formatter skipped: payload ${formatBytes(contentSize)} exceeds limit ${formatBytes(
       maxSize
     )}. Adjust maxPayloadBytes to increase this limit.`;
-    warning.style.cssText =
-      'position: sticky; top: 0; z-index: 2147483647; padding: 0.6em 1em; background: #fff4e5; color: #7a4b00; ' +
-      'border-bottom: 1px solid #f0c36d; font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco, "Courier New", monospace; font-size: 13px;';
+    warning.style.cssText = SIZE_WARNING_STYLE;
     document.body.prepend(warning);
   };
 
-  const startStreamingParse = (rawText, metricsHandler, options = {}) => {
+  const parsePrometheusTextInChunks = (rawText, metricsHandler, options = {}) => {
     const totalLength = rawText.length;
     let index = 0;
     let lineNumber = 0;
@@ -1464,52 +1444,48 @@
    * Determines if the page contains Prometheus metrics.
    * @returns {boolean} - True if the page is a Prometheus metrics endpoint.
    */
-  const isValidEndpoint = () => {
+  const isPrometheusEndpoint = () => {
     const contentType = (document.contentType || '').toLowerCase();
     if (contentType.includes('application/openmetrics-text')) {
       return true;
     }
 
-    if (contentType.startsWith('text/plain') || contentType === '') {
-      const rawText = document.body.textContent || '';
-      const bodyText = rawText.trim();
-      if (!bodyText) return false;
-      const sampleText = bodyText.slice(0, 200000);
-      const lines = sampleText.split('\n');
-      let metricLines = 0;
-      let metadataLines = 0;
-      let inspected = 0;
-      const maxInspect = 200;
-
-      for (const rawLine of lines) {
-        const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-        if (!line.trim()) continue;
-        inspected += 1;
-        const classification = classifyPrometheusLine(line);
-        if (classification?.type === 'metric') {
-          metricLines += 1;
-        } else if (classification?.type === 'comment') {
-          if (classification.commentType !== 'COMMENT') {
-            metadataLines += 1;
-          }
-        }
-        if (inspected >= maxInspect) {
-          break;
-        }
-      }
-
-      if (metricLines === 0) return false;
-      const metricRatio = metricLines / Math.max(1, inspected);
-      const hasMetadata = metadataLines > 0;
-      const isMetricDense = metricRatio > 0.5 && metricLines >= 3;
-      return hasMetadata || isMetricDense;
+    if (!contentType.startsWith('text/plain') && contentType !== '') {
+      return false;
     }
 
-    return false;
+    const rawText = document.body.textContent || '';
+    const bodyText = rawText.trim();
+    if (!bodyText) return false;
+    const lines = bodyText.slice(0, SAMPLE_SIZE_LIMIT).split('\n');
+    let metricLines = 0;
+    let metadataLines = 0;
+    let inspected = 0;
+
+    for (const rawLine of lines) {
+      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+      if (!line.trim()) continue;
+      inspected += 1;
+      const classification = classifyPrometheusLine(line);
+      if (classification?.type === 'metric') {
+        metricLines += 1;
+      } else if (classification?.type === 'comment' && classification.commentType !== 'COMMENT') {
+        metadataLines += 1;
+      }
+      if (inspected >= MAX_INSPECTED_LINES) {
+        break;
+      }
+    }
+
+    if (metricLines === 0) return false;
+    const metricRatio = metricLines / Math.max(1, inspected);
+    const hasMetadata = metadataLines > 0;
+    const isMetricDense = metricRatio > 0.5 && metricLines >= 3;
+    return hasMetadata || isMetricDense;
   };
 
-  const processPage = () => {
-    if (!isValidEndpoint()) return;
+  const formatPageIfPrometheusEndpoint = () => {
+    if (!isPrometheusEndpoint()) return;
 
     if (document.getElementById('pf-root')) return;
 
@@ -1536,8 +1512,6 @@
         showSizeWarning(contentSize, settings.maxPayloadBytes);
         return;
       }
-
-      document.body.innerHTML = '';
 
       const container = document.createElement('div');
       container.id = 'pf-root';
@@ -1586,7 +1560,7 @@
       layout.appendChild(main);
       contentContainer.appendChild(layout);
       container.appendChild(contentContainer);
-      document.body.appendChild(container);
+      document.body.replaceChildren(container);
 
       const currentTheme = resolveThemeId(result.theme);
 
@@ -1630,7 +1604,7 @@
             metricsHandler.renderFlatEntries(query);
             return;
           }
-          metricsHandler.renderEntries(query);
+          metricsHandler.renderGroupedEntries(query);
         },
         onViewModeChange: (mode) => {
           if (mode === 'raw') {
@@ -1642,14 +1616,14 @@
             metricsHandler.renderFlatEntries(metricsHandler.lastQuery || '');
             return;
           }
-          metricsHandler.renderEntries(metricsHandler.lastQuery || '');
+          metricsHandler.renderGroupedEntries(metricsHandler.lastQuery || '');
         },
       });
 
       uiManager.injectCSS();
       restoreVisibility();
-      uiManager.injectViewToggleUI();
-      uiManager.injectSearchUI();
+      uiManager.initializeViewToggleUI();
+      uiManager.initializeSearchUI();
       metricsHandler.setNavRenderHook(() => {
         uiManager.mountSearchControls();
         uiManager.mountSearchBar();
@@ -1673,9 +1647,9 @@
         uiManager.mountSearchBar();
       };
 
-      startStreamingParse(rawText, metricsHandler, {
+      parsePrometheusTextInChunks(rawText, metricsHandler, {
         onComplete: () => {
-          metricsHandler.buildGroups({
+          metricsHandler.buildMetricGroups({
             streaming: true,
             onComplete: finalizeRender,
           });
@@ -1702,13 +1676,13 @@
     }
   };
 
-   if (document.readyState !== 'loading') {
-     processPage();
-   } else {
-     const listener = () => {
-       processPage();
-       document.removeEventListener('DOMContentLoaded', listener);
-     };
-     document.addEventListener('DOMContentLoaded', listener);
-   }
- })();
+  if (document.readyState !== 'loading') {
+    formatPageIfPrometheusEndpoint();
+  } else {
+    const listener = () => {
+      formatPageIfPrometheusEndpoint();
+      document.removeEventListener('DOMContentLoaded', listener);
+    };
+    document.addEventListener('DOMContentLoaded', listener);
+  }
+})();
