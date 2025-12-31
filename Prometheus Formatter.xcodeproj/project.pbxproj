@@ -63,6 +63,7 @@
 			explicitFolders = (
 				Resources/_locales,
 				Resources/images,
+				Resources/themes,
 			);
 			path = "Prometheus Formatter Extension";
 			sourceTree = "<group>";

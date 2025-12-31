@@ -16,7 +16,24 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": [],
+      "resources": [
+        "prometheus-formatter-base.css",
+        "themes/dark-aurora.css",
+        "themes/dark-cinder.css",
+        "themes/dark-ember.css",
+        "themes/dark-forest.css",
+        "themes/dark-graphite.css",
+        "themes/dark-ocean.css",
+        "themes/nocturne.css",
+        "themes/vaporwave.css",
+        "themes/light-ivory.css",
+        "themes/light-mint.css",
+        "themes/light-rose.css",
+        "themes/light-sandstone.css",
+        "themes/light-sky.css",
+        "themes/light-slate.css",
+        "images/theme-selector.png"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

@@ -1,0 +1,30 @@
+:root[data-theme='light-sandstone'] {
+  --pf-bg: #FFF9F1;
+  --pf-fg: #3A2E24;
+  --pf-metric-name-color: #8C4A3D;
+  --pf-label-key-color: #B07B3E;
+  --pf-label-value-color: #4F7A4C;
+  --pf-value-color: #1F5E85;
+  --pf-comment-color: #A59B92;
+  --pf-warning-bg: #FFF0DB;
+  --pf-warning-fg: #7A4A1A;
+  --pf-warning-border: #E7B56A;
+  --pf-family-bg: #FBF5EC;
+  --pf-family-header-bg: #F2E8DC;
+  --pf-family-border: #E5D3C2;
+  --pf-family-help-color: #7A6B5E;
+  --pf-family-row-bg: #F7EDE1;
+  --pf-family-pill-bg: #FFFFFF;
+  --pf-family-pill-border: #E2CDBA;
+  --pf-family-pill-fg: #655549;
+  --pf-nav-bg: #F7EDE2;
+  --pf-nav-border: #E7D3C1;
+  --pf-nav-title-color: #6A5C52;
+  --pf-nav-link-hover-bg: #EFE0D0;
+  --pf-search-hit-bg: #FFE7C0;
+  --pf-search-hit-border: #E3A94A;
+  --pf-search-bg: #C7A486;
+  --pf-search-border: #A4866B;
+  --pf-scrollbar-thumb: #B79C84;
+  --pf-scrollbar-track: #F4ECE2;
+}

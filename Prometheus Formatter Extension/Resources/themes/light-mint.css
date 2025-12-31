@@ -1,0 +1,30 @@
+:root[data-theme='light-mint'] {
+  --pf-bg: #F4FBF7;
+  --pf-fg: #26312B;
+  --pf-metric-name-color: #2F6F7A;
+  --pf-label-key-color: #5D7D42;
+  --pf-label-value-color: #2F7A55;
+  --pf-value-color: #2B5D9C;
+  --pf-comment-color: #93A29A;
+  --pf-warning-bg: #FFF3D8;
+  --pf-warning-fg: #7A4B00;
+  --pf-warning-border: #E3B85E;
+  --pf-family-bg: #EEF6F1;
+  --pf-family-header-bg: #E5EFE9;
+  --pf-family-border: #D5E3DB;
+  --pf-family-help-color: #60766B;
+  --pf-family-row-bg: #F1F8F3;
+  --pf-family-pill-bg: #FFFFFF;
+  --pf-family-pill-border: #D4E1D9;
+  --pf-family-pill-fg: #556A5F;
+  --pf-nav-bg: #EAF2ED;
+  --pf-nav-border: #D6E3DA;
+  --pf-nav-title-color: #596B61;
+  --pf-nav-link-hover-bg: #DFECE4;
+  --pf-search-hit-bg: #FCECC3;
+  --pf-search-hit-border: #E0AF4A;
+  --pf-search-bg: #A6C1B0;
+  --pf-search-border: #7E9A89;
+  --pf-scrollbar-thumb: #9FB8A8;
+  --pf-scrollbar-track: #EDF5F0;
+}
