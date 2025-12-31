@@ -1,0 +1,30 @@
+:root[data-theme='dark-aurora'] {
+  --pf-bg: #1B2022;
+  --pf-fg: #C3CBD0;
+  --pf-metric-name-color: #7AB7B2;
+  --pf-label-key-color: #C3CBD0;
+  --pf-label-value-color: #8BC46A;
+  --pf-value-color: #D59B7A;
+  --pf-comment-color: #7F8991;
+  --pf-warning-bg: #362B1A;
+  --pf-warning-fg: #F1D2A0;
+  --pf-warning-border: #B97F2D;
+  --pf-family-bg: #23292C;
+  --pf-family-header-bg: #2B3336;
+  --pf-family-border: #3A4348;
+  --pf-family-help-color: #9AA4AB;
+  --pf-family-row-bg: #2E363A;
+  --pf-family-pill-bg: #293236;
+  --pf-family-pill-border: #3A4348;
+  --pf-family-pill-fg: #A6AFB6;
+  --pf-nav-bg: #242C30;
+  --pf-nav-border: #3A4348;
+  --pf-nav-title-color: #A0A9B0;
+  --pf-nav-link-hover-bg: #2E363A;
+  --pf-search-hit-bg: #3B2F1A;
+  --pf-search-hit-border: #B97F2D;
+  --pf-search-bg: #1F262A;
+  --pf-search-border: #394247;
+  --pf-scrollbar-thumb: #4F595F;
+  --pf-scrollbar-track: #1F262A;
+}

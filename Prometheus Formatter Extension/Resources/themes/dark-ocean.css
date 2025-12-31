@@ -1,0 +1,30 @@
+:root[data-theme='dark-ocean'] {
+  --pf-bg: #1A1F2A;
+  --pf-fg: #C5CAD6;
+  --pf-metric-name-color: #7FB2F0;
+  --pf-label-key-color: #C5CAD6;
+  --pf-label-value-color: #7CC08A;
+  --pf-value-color: #F2A970;
+  --pf-comment-color: #7E8796;
+  --pf-warning-bg: #352A1B;
+  --pf-warning-fg: #F4D4A0;
+  --pf-warning-border: #C0812E;
+  --pf-family-bg: #212735;
+  --pf-family-header-bg: #2A3140;
+  --pf-family-border: #374053;
+  --pf-family-help-color: #9BA3B3;
+  --pf-family-row-bg: #2C3444;
+  --pf-family-pill-bg: #262D3B;
+  --pf-family-pill-border: #374053;
+  --pf-family-pill-fg: #AAB1BF;
+  --pf-nav-bg: #232A38;
+  --pf-nav-border: #374053;
+  --pf-nav-title-color: #A1A8B6;
+  --pf-nav-link-hover-bg: #2C3444;
+  --pf-search-hit-bg: #3D2F1A;
+  --pf-search-hit-border: #C0812E;
+  --pf-search-bg: #1E2431;
+  --pf-search-border: #394257;
+  --pf-scrollbar-thumb: #4C556B;
+  --pf-scrollbar-track: #1E2431;
+}

@@ -1,0 +1,30 @@
+:root[data-theme='light-sky'] {
+  --pf-bg: #F5F9FF;
+  --pf-fg: #253040;
+  --pf-metric-name-color: #375C9C;
+  --pf-label-key-color: #6B7FA8;
+  --pf-label-value-color: #4F7E6C;
+  --pf-value-color: #1E5FAE;
+  --pf-comment-color: #97A3B3;
+  --pf-warning-bg: #FFF2D8;
+  --pf-warning-fg: #7A4B00;
+  --pf-warning-border: #E3B65A;
+  --pf-family-bg: #EEF3FA;
+  --pf-family-header-bg: #E4EAF4;
+  --pf-family-border: #D4DCE8;
+  --pf-family-help-color: #667181;
+  --pf-family-row-bg: #F0F5FB;
+  --pf-family-pill-bg: #FFFFFF;
+  --pf-family-pill-border: #D3DBE7;
+  --pf-family-pill-fg: #586373;
+  --pf-nav-bg: #ECF1F8;
+  --pf-nav-border: #D6DFEB;
+  --pf-nav-title-color: #5D6878;
+  --pf-nav-link-hover-bg: #E1E9F3;
+  --pf-search-hit-bg: #FFE8BF;
+  --pf-search-hit-border: #E2AD4E;
+  --pf-search-bg: #B1BDD4;
+  --pf-search-border: #8E9BB5;
+  --pf-scrollbar-thumb: #A5B3CC;
+  --pf-scrollbar-track: #EAF0F8;
+}

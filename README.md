@@ -14,15 +14,21 @@ analyzing metrics, Prometheus Formatter provides a cleaner and more intuitive vi
 
 ## Features
 
-- **Automatic Detection**: Identifies Prometheus metrics on **any** webpage.
-- **Syntax Highlighting**: Differentiates metric names, labels, values, and comments with distinct colors.
-- **Dark & Light Modes**: Switch between themes **for** comfortable viewing **in** **any** environment.
-- **Search & Filter**: Easily search through metrics to find specific information.
+- **Automatic Detection**: Identifies Prometheus/OpenMetrics endpoints on any webpage.
+- **Family View + Metadata**: Groups samples by metric family and surfaces HELP/TYPE/UNIT metadata with series counts.
+- **Sidebar Navigation**: Jump between families with a collapsible, resizable sidebar.
+- **View Modes**: Toggle between Formatted, Flat (virtualized list), and Raw views.
+- **Theme Picker**: Choose from 14 curated light/dark themes.
+- **Search & Filter**: Search across names, labels, values, timestamps, exemplars, and raw text with highlighted matches.
+- **Large-Payload Friendly**: Streaming parsing and virtualization keep big payloads responsive, with size guardrails.
 
-### Dark Mode
+## What's New in v2
 
-![Dark Mode Screenshot](/etc/prometheus-formatter-dark-mode.png)
+- **New Parser**: Full line validation with OpenMetrics extras (UNIT and exemplars) plus parse warnings for malformed lines.
+- **New Layout**: Metrics grouped into families with metadata pills and a searchable sidebar navigator.
+- **View Toggle**: Formatted, Flat, and Raw views with virtualized rendering for large endpoints.
+- **Expanded Themes**: Theme menu with 14 palettes across light and dark variants.
 
-### Light Mode
+### Preview
 
-![Light Mode Screenshot](/etc/prometheus-formatter-light-mode.png) 
+![Prometheus Formatter Preview](/etc/prometheus-formatter.gif)

@@ -1,0 +1,30 @@
+:root[data-theme='light-rose'] {
+  --pf-bg: #FFF6F7;
+  --pf-fg: #3A2A2F;
+  --pf-metric-name-color: #8D4A6C;
+  --pf-label-key-color: #9B6B4A;
+  --pf-label-value-color: #4E7A5C;
+  --pf-value-color: #2F5E8A;
+  --pf-comment-color: #A59AA0;
+  --pf-warning-bg: #FFF0DE;
+  --pf-warning-fg: #7A4B00;
+  --pf-warning-border: #E4B36A;
+  --pf-family-bg: #F9ECEF;
+  --pf-family-header-bg: #F1E2E7;
+  --pf-family-border: #E4D1D7;
+  --pf-family-help-color: #76616A;
+  --pf-family-row-bg: #F7E7EB;
+  --pf-family-pill-bg: #FFFFFF;
+  --pf-family-pill-border: #E2CDD3;
+  --pf-family-pill-fg: #65505A;
+  --pf-nav-bg: #F6E9ED;
+  --pf-nav-border: #E3D1D7;
+  --pf-nav-title-color: #6A5861;
+  --pf-nav-link-hover-bg: #EEDBE2;
+  --pf-search-hit-bg: #FFE3C4;
+  --pf-search-hit-border: #E1A960;
+  --pf-search-bg: #C5A1AE;
+  --pf-search-border: #A17D8A;
+  --pf-scrollbar-thumb: #B599A5;
+  --pf-scrollbar-track: #F2E6EA;
+}

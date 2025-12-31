@@ -1,0 +1,30 @@
+:root[data-theme='dark-ember'] {
+  --pf-bg: #231C18;
+  --pf-fg: #D4C9BD;
+  --pf-metric-name-color: #E08E79;
+  --pf-label-key-color: #D4C9BD;
+  --pf-label-value-color: #8CB37B;
+  --pf-value-color: #F2A86A;
+  --pf-comment-color: #8F847A;
+  --pf-warning-bg: #3E2C1C;
+  --pf-warning-fg: #F4D39E;
+  --pf-warning-border: #C0812E;
+  --pf-family-bg: #2A231F;
+  --pf-family-header-bg: #332B26;
+  --pf-family-border: #3F3530;
+  --pf-family-help-color: #A1978D;
+  --pf-family-row-bg: #352D28;
+  --pf-family-pill-bg: #312924;
+  --pf-family-pill-border: #433831;
+  --pf-family-pill-fg: #B6ADA3;
+  --pf-nav-bg: #2C2420;
+  --pf-nav-border: #433831;
+  --pf-nav-title-color: #B0A59B;
+  --pf-nav-link-hover-bg: #352D28;
+  --pf-search-hit-bg: #4A341A;
+  --pf-search-hit-border: #C0812E;
+  --pf-search-bg: #23201D;
+  --pf-search-border: #4A3D33;
+  --pf-scrollbar-thumb: #5A4E45;
+  --pf-scrollbar-track: #23201D;
+}

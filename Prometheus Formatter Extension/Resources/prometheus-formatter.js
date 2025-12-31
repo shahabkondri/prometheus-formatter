@@ -1,495 +1,1688 @@
- (() => {
-   const browserAPI = typeof window.browser !== 'undefined' ? window.browser : window.chrome;
-   if (!browserAPI) {
-     console.error('Browser API is not available');
-     return;
-   }
-
-   const COMMENT_REGEX = /^#\s+(HELP|TYPE)\s+(.*)/;
-
-   // Metric name must start with [a-zA-Z_:]
-   // Value must be a valid Prometheus value (number, +Inf, -Inf, NaN)
-   const METRIC_REGEX = /^([a-zA-Z_:][\w_:]*)(?:\{(.*)\})?\s+([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?|NaN|Inf|\+Inf|\-Inf)$/;
-   const LABEL_REGEX = /([\w_]+)="(.*?)"/g;
-
-   const prometheusFormatterCSS = `
-   /* ====================================== */
-   /*        Prometheus Formatter CSS        */
-   /* ====================================== */
-
-   /* Define variables globally */
-   :root[data-theme='light'] {
-     --pf-bg: #ffffff;
-     --pf-fg: #302A24;
-     --pf-metric-name-color: #704080;
-     --pf-label-key-color: #9C7028;
-     --pf-label-value-color: #486830;
-     --pf-value-color: #1E5C84;
-     --pf-comment-color: #A0A0A0;
-   }
-
-   :root[data-theme='dark'] {
-     --pf-bg: #1E1F22;
-     --pf-fg: #BCBEC4;
-     --pf-metric-name-color: #C77DBB;
-     --pf-label-key-color: #BCBEC4;
-     --pf-label-value-color: #6AAB73;
-     --pf-value-color: #CF8E6D;
-     --pf-comment-color: #7A7E85;
-   }
-
-   html, body {
-     margin: 0;
-     padding: 0;
-     width: 100%;
-     background-color: var(--pf-bg);
-     color: var(--pf-fg);
-   }
-
-   #pf-root {
-     color-scheme: light dark;
-     box-sizing: border-box;
-     margin: 0;
-     padding: 0;
-     font-family: Menlo, Consolas, DejaVu Sans Mono, monospace;
-     transition: background-color 0.3s ease, color 0.3s ease;
-     height: 100%;
-     width: 100%;
-     display: flex;
-     flex-direction: column;
-   }
-
-   #pf-root *,
-   #pf-root *::before,
-   #pf-root *::after {
-     box-sizing: inherit;
-   }
-
-   .pf-container {
-     padding: 1em;
-     line-height: 1.3;
-     word-wrap: break-word;
-     flex: 1;
-     overflow-y: auto;
-   }
-
-   #pf-header {
-     position: fixed;
-     top: 0;
-     left: 0;
-     right: 0;
-     color: var(--pf-fg);
-     display: flex;
-     align-items: center;
-     justify-content: flex-end;
-     padding: 0.5em 1em;
-     z-index: 10000;
-     box-sizing: border-box;
-   }
-
-   #pf-header .pf-search-container {
-     display: flex;
-     align-items: center;
-     width: 0;
-     overflow: hidden;
-     transition: width 0.3s ease;
-   }
-
-   #pf-header .pf-search-container.active {
-     width: calc(100% - 100px);
-   }
-
-   #pf-header input {
-     width: 100%;
-     padding: 0.5em;
-     font-size: 1em;
-     box-sizing: border-box;
-     background-color: var(--pf-bg);
-     color: var(--pf-fg);
-     border: 1px solid var(--pf-fg);
-     border-radius: 4px;
-   }
-
-   #pf-header img {
-     width: 24px;
-     height: 24px;
-     cursor: pointer;
-     margin-left: 10px;
-     transition: transform 0.2s ease, filter 0.2s ease;
-   }
-
-   #pf-header img.pf-icon:hover {
-     transform: scale(1.1);
-     filter: brightness(1.2);
-   }
-
-   .pf-content {
-     margin-top: 3em;
-   }
-
-   .pf-section {
-     margin: 0 0 0.5em 0;
-   }
-
-   .pf-metric-name {
-     color: var(--pf-metric-name-color);
-     font-weight: bold;
-   }
-
-   .pf-labels {
-     color: var(--pf-fg);
-   }
-
-   .pf-label-key {
-     color: var(--pf-label-key-color);
-     font-weight: bold;
-   }
-
-   .pf-label-value {
-     color: var(--pf-label-value-color);
-   }
-
-   .pf-value {
-     color: var(--pf-value-color);
-   }
-
-   .pf-comment {
-     color: var(--pf-comment-color);
-     font-style: italic;
-     margin: 0 0 0.5em 0;
-   }
-   `;
-
-   class PrometheusMetricsHandler {
-     constructor() {
-       this.entries = [];
-     }
-
-     /**
-      * Parse a line of text and add a Metric or Comment to entries.
-      * @param {string} line - The line to parse.
-      */
-     parseAndAddEntry(line) {
-       // Try to parse as comment
-       const commentMatch = line.match(COMMENT_REGEX);
-       if (commentMatch) {
-         const [, type, text] = commentMatch;
-         this.entries.push({
-           type: 'comment',
-           commentType: type,
-           text: text,
-           getHtml: () => `<div class="pf-comment"># ${type} ${text}</div>`,
-         });
-         return;
-       }
-
-       // Try to parse as metric
-       const metricMatch = line.match(METRIC_REGEX);
-       if (metricMatch) {
-         const [, metricName, labelsString, value] = metricMatch;
-         const labels = this.parseLabels(labelsString);
-         this.entries.push({
-           type: 'metric',
-           name: metricName,
-           labels: labels,
-           value: value,
-           getHtml: () => {
-             const labelParts = Object.entries(labels).map(([key, value]) => {
-               return `<span class="pf-label-key">${key}</span>="<span class="pf-label-value">${value}</span>"`;
-             });
-             const formattedLabels = labelParts.length > 0 ? `<span class="pf-labels">{${labelParts.join(', ')}}</span>` : '';
-             return `<div class="pf-section"><span class="pf-metric-name">${metricName}</span>${formattedLabels} <span class="pf-value">${value}</span></div>`;
-           },
-         });
-         return;
-       }
-       // If the line doesn't match, ignore it
-     }
-
-     /**
-      * Parse the labels from a labels string.
-      * @param {string} labelsString - The labels string.
-      * @returns {Object} - Labels as key-value pairs.
-      */
-     parseLabels(labelsString) {
-       const labels = {};
-       if (!labelsString) return labels;
-       let match;
-       while ((match = LABEL_REGEX.exec(labelsString)) !== null) {
-         const [, key, value] = match;
-         labels[key] = value;
-       }
-       // Reset LABEL_REGEX lastIndex for next use
-       LABEL_REGEX.lastIndex = 0;
-       return labels;
-     }
-
-     /**
-      * Process an array of lines and populate entries.
-      * @param {string[]} lines - Lines to process.
-      */
-     processLines(lines) {
-       lines.forEach((line) => this.parseAndAddEntry(line));
-     }
-
-     /**
-      * Filter entries based on a search query.
-      * @param {string} query - The search query.
-      * @returns {Array} - Filtered array of entries.
-      */
-     filterEntries(query) {
-       if (!query) return this.entries;
-       const lowerQuery = query.toLowerCase();
-       return this.entries.filter(({
-         type,
-         name,
-         labels,
-         text,
-         value
-       }) => {
-         return type === 'comment' ? text.toLowerCase().includes(lowerQuery) :
-           (name.toLowerCase().includes(lowerQuery) ||
-             Object.entries(labels).some(([key, val]) => key.toLowerCase().includes(lowerQuery) || val.toLowerCase().includes(lowerQuery)) ||
-             value.toLowerCase().includes(lowerQuery));
-       });
-     }
-
-     /**
-      * Render entries into HTML and insert into the page.
-      * @param {Array} entries - Array of entries to render.
-      */
-     renderEntries(entries) {
-       const html = entries.map((item) => item.getHtml()).join('\n');
-       const container = document.getElementById('pf-metrics-container');
-       container.innerHTML = html;
-     }
-   }
-
-   class PrometheusUIManager {
-
-     constructor(currentTheme, browserAPI, onSearch) {
-       this.currentTheme = currentTheme;
-       this.browserAPI = browserAPI;
-       this.onSearch = onSearch;
-       this.searchBarVisible = false;
-     }
-
-     injectCSS() {
-       if (document.getElementById('prometheus-formatter-style')) return;
-       const style = document.createElement('style');
-       style.id = 'prometheus-formatter-style';
-       style.type = 'text/css';
-       style.textContent = prometheusFormatterCSS;
-       document.head.appendChild(style);
-     }
-
-     injectHeader() {
-       const header = document.createElement('div');
-       header.id = 'pf-header';
-
-       const searchContainer = document.createElement('div');
-       searchContainer.classList.add('pf-search-container');
-
-       const searchInput = document.createElement('input');
-       searchInput.type = 'text';
-       searchInput.id = 'pf-search-input';
-       searchInput.placeholder = 'Search metrics...';
-
-       searchInput.addEventListener('input', (e) => {
-         this.onSearch(e.target.value);
-       });
-
-       searchContainer.appendChild(searchInput);
-
-       const filterIcon = document.createElement('img');
-       filterIcon.id = 'pf-filter-icon';
-       filterIcon.src = this.browserAPI.runtime.getURL('images/filter.png');
-       filterIcon.alt = 'Filter Metrics';
-       filterIcon.classList.add('pf-icon');
-
-       filterIcon.addEventListener('click', () => {
-         this.toggleSearchBar(searchContainer, header);
-       });
-
-       const sunIcon = document.createElement('img');
-       sunIcon.id = 'pf-sun-icon';
-       sunIcon.src = this.browserAPI.runtime.getURL('images/sun.png');
-       sunIcon.alt = 'Light Mode';
-       sunIcon.style.display = this.currentTheme === 'light' ? 'none' : 'inline';
-       sunIcon.classList.add('pf-icon');
-
-       const moonIcon = document.createElement('img');
-       moonIcon.id = 'pf-moon-icon';
-       moonIcon.src = this.browserAPI.runtime.getURL('images/moon.png');
-       moonIcon.alt = 'Dark Mode';
-       moonIcon.style.display = this.currentTheme === 'dark' ? 'none' : 'inline';
-       moonIcon.classList.add('pf-icon');
-
-       sunIcon.addEventListener('click', () => this.switchTheme('light'));
-       moonIcon.addEventListener('click', () => this.switchTheme('dark'));
-
-       header.appendChild(searchContainer);
-       header.appendChild(filterIcon);
-       header.appendChild(sunIcon);
-       header.appendChild(moonIcon);
-
-       const container = document.getElementById('pf-root');
-       container.insertBefore(header, container.firstChild);
-     }
-
-     /**
-      * Switch the theme between light and dark.
-      * @param {string} newTheme - The new theme to apply.
-      */
-     switchTheme(newTheme) {
-       const rootElement = document.documentElement; // Get the <html> element
-       if (!rootElement) {
-         console.error('Root element not found. Cannot switch theme.');
-         return;
-       }
-
-       rootElement.setAttribute('data-theme', newTheme);
-
-       this.browserAPI.storage.local.set({
-         theme: newTheme
-       }, () => {
-         console.log(`Theme set to ${newTheme}`);
-       });
-
-       const sunIcon = document.getElementById('pf-sun-icon');
-       const moonIcon = document.getElementById('pf-moon-icon');
-
-       if (sunIcon && moonIcon) {
-         if (newTheme === 'light') {
-           sunIcon.style.display = 'none';
-           moonIcon.style.display = 'inline';
-         } else {
-           sunIcon.style.display = 'inline';
-           moonIcon.style.display = 'none';
-         }
-       }
-     }
-
-     /**
-      * Toggle the visibility of the search bar.
-      * @param {HTMLElement} searchContainer - The search container element.
-      * @param {HTMLElement} header - The header element.
-      */
-     toggleSearchBar(searchContainer, header) {
-       if (this.searchBarVisible) {
-         searchContainer.classList.remove('active');
-         this.searchBarVisible = false;
-       } else {
-         searchContainer.classList.add('active');
-         this.searchBarVisible = true;
-         const searchInput = searchContainer.querySelector('#pf-search-input');
-         searchInput.focus();
-       }
-     }
-   }
-
-   /**
-    * Determines if the page contains Prometheus metrics.
-    * @returns {boolean} - True if the page is a Prometheus metrics endpoint.
-    */
-   const isValidEndpoint = () => {
-     const contentType = document.contentType;
-     if (contentType === 'application/openmetrics-text') {
-       return true;
-     }
-
-     if (contentType === 'text/plain') {
-       const bodyText = document.body.textContent.trim();
-       const lines = bodyText.split('\n');
-       let metricLines = 0;
-       let commentLines = 0;
-       let helpLines = 0;
-       let typeLines = 0;
-
-       for (let line of lines) {
-         if (COMMENT_REGEX.test(line)) {
-           commentLines++;
-           metricLines++;
-           const commentMatch = line.match(COMMENT_REGEX);
-           if (commentMatch) {
-             const [, type] = commentMatch;
-             if (type === 'HELP') helpLines++;
-             if (type === 'TYPE') typeLines++;
-           }
-         } else if (METRIC_REGEX.test(line)) {
-           metricLines++;
-         }
-       }
-
-       // More than 50% of lines are metric lines
-       // At least one HELP and one TYPE comment present
-       const isMetricDense = lines.length > 0 && (metricLines / lines.length) > 0.5;
-       const hasHelpAndType = helpLines > 0 && typeLines > 0;
-
-       return isMetricDense && hasHelpAndType;
-     }
-
-     return false;
-   };
-
-   const processPage = () => {
-     if (!isValidEndpoint()) return;
-
-     if (document.getElementById('pf-root')) return;
-
-     const bodyText = document.body.textContent.trim();
-     if (!bodyText) return;
-
-     const MAX_SIZE_BYTES = 32 * 1024 * 1024; // 32 MB
-     const contentSize = new Blob([bodyText]).size;
-
-     if (contentSize > MAX_SIZE_BYTES) {
-       console.warn('Content size exceeds 32 MB. Skipping processing.');
-       return;
-     }
-
-     document.body.innerHTML = '';
-
-     const container = document.createElement('div');
-     container.id = 'pf-root';
-
-     const contentContainer = document.createElement('div');
-     contentContainer.classList.add('pf-container', 'pf-content');
-
-     const metricsContainer = document.createElement('div');
-     metricsContainer.id = 'pf-metrics-container';
-
-     contentContainer.appendChild(metricsContainer);
-     container.appendChild(contentContainer);
-     document.body.appendChild(container);
-
-     browserAPI.storage.local.get('theme', (result) => {
-       let currentTheme = result.theme || 'dark';
-       document.documentElement.setAttribute('data-theme', currentTheme);
-
-       const metricsHandler = new PrometheusMetricsHandler();
-       const lines = bodyText.split('\n');
-       metricsHandler.processLines(lines);
-
-       metricsHandler.renderEntries(metricsHandler.entries);
-
-       const uiManager = new PrometheusUIManager(currentTheme, browserAPI, (query) => {
-         const filteredEntries = metricsHandler.filterEntries(query);
-         metricsHandler.renderEntries(filteredEntries);
-       });
-
-       uiManager.injectCSS();
-       uiManager.injectHeader();
-     });
-   };
-
-   if (document.readyState !== 'loading') {
-     processPage();
-   } else {
-     const listener = () => {
-       processPage();
-       document.removeEventListener('DOMContentLoaded', listener);
-     };
-     document.addEventListener('DOMContentLoaded', listener);
-   }
- })();
+(() => {
+  const root = typeof globalThis !== 'undefined' ? globalThis : window;
+  const browserAPI = root.browser ?? root.chrome;
+  if (!browserAPI) {
+    console.error('Browser API is not available');
+    return;
+  }
+
+  const parser = root.PrometheusFormatterParser;
+  if (!parser) {
+    console.error('Prometheus parser is not available');
+    return;
+  }
+
+  const { parsePrometheusLine, classifyPrometheusLine } = parser;
+
+  const HTML_ESCAPE_MAP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (match) => HTML_ESCAPE_MAP[match]);
+
+  const formatLabelValue = (value) => {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+      .replace(/"/g, '\\"');
+  };
+
+  const DEFAULT_MAX_SIZE_BYTES = 32 * 1024 * 1024;
+  const DEFAULT_LARGE_PAYLOAD_BYTES = 6 * 1024 * 1024;
+  const DEFAULT_VIRTUAL_ROW_HEIGHT = 24;
+  const DEFAULT_VIRTUAL_OVERSCAN = 8;
+  const IDLE_TIMEOUT_MS = 100;
+  const CHUNK_TIME_SLICE_MS = 12;
+  const SAMPLE_SIZE_LIMIT = 200000;
+  const MAX_INSPECTED_LINES = 200;
+
+  const FAMILY_SUFFIXES = ['_bucket', '_sum', '_count'];
+  const META_COMMENT_TYPES = new Set(['HELP', 'TYPE', 'UNIT']);
+  const SIDEBAR_TOGGLE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' +
+    '<rect width="18" height="18" x="3" y="3" rx="2"></rect>' +
+    '<path d="M9 3v18"></path>' +
+    '</svg>';
+  const SEARCH_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m21 21-4.34-4.34"></path>' +
+    '<circle cx="11" cy="11" r="8"></circle>' +
+    '</svg>';
+  const CLEAR_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M18 6 6 18"></path>' +
+    '<path d="M6 6 18 18"></path>' +
+    '</svg>';
+  const SIZE_WARNING_STYLE = [
+    'position: sticky',
+    'top: 0',
+    'z-index: 2147483647',
+    'padding: 0.6em 1em',
+    'background: #fff4e5',
+    'color: #7a4b00',
+    'border-bottom: 1px solid #f0c36d',
+    'font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco, "Courier New", monospace',
+    'font-size: 13px',
+  ].join('; ');
+  const BASE_STYLE_ID = 'prometheus-formatter-base-style';
+  const THEME_STYLE_ID = 'prometheus-formatter-theme-style';
+  const BASE_STYLE_PATH = 'prometheus-formatter-base.css';
+  const DEFAULT_THEME_ID = 'dark-graphite';
+  const LEGACY_THEME_MAP = {
+    dark: 'dark-graphite',
+    light: 'light-ivory',
+  };
+  const THEME_DEFINITIONS = [
+    { id: 'light-ivory', label: 'Ivory', mode: 'light', file: 'themes/light-ivory.css' },
+    { id: 'light-sandstone', label: 'Sandstone', mode: 'light', file: 'themes/light-sandstone.css' },
+    { id: 'light-mint', label: 'Mint', mode: 'light', file: 'themes/light-mint.css' },
+    { id: 'light-sky', label: 'Sky', mode: 'light', file: 'themes/light-sky.css' },
+    { id: 'light-slate', label: 'Slate', mode: 'light', file: 'themes/light-slate.css' },
+    { id: 'light-rose', label: 'Rose', mode: 'light', file: 'themes/light-rose.css' },
+    { id: 'dark-graphite', label: 'Graphite', mode: 'dark', file: 'themes/dark-graphite.css' },
+    { id: 'dark-ember', label: 'Ember', mode: 'dark', file: 'themes/dark-ember.css' },
+    { id: 'dark-forest', label: 'Forest', mode: 'dark', file: 'themes/dark-forest.css' },
+    { id: 'dark-ocean', label: 'Ocean', mode: 'dark', file: 'themes/dark-ocean.css' },
+    { id: 'dark-cinder', label: 'Cinder', mode: 'dark', file: 'themes/dark-cinder.css' },
+    { id: 'dark-aurora', label: 'Aurora', mode: 'dark', file: 'themes/dark-aurora.css' },
+    { id: 'vaporwave', label: 'Vaporwave', mode: 'dark', file: 'themes/vaporwave.css' },
+    { id: 'nocturne', label: 'Nocturne', mode: 'dark', file: 'themes/nocturne.css' },
+  ];
+  const THEME_GROUPS = [
+    { mode: 'light', label: 'Light' },
+    { mode: 'dark', label: 'Dark' },
+  ];
+  const THEME_LOOKUP = new Map(THEME_DEFINITIONS.map((theme) => [theme.id, theme]));
+
+  const resolveThemeId = (value) => {
+    const normalized = value ? String(value).trim() : '';
+    const legacy = LEGACY_THEME_MAP[normalized];
+    const candidate = legacy || normalized;
+    if (THEME_LOOKUP.has(candidate)) return candidate;
+    return DEFAULT_THEME_ID;
+  };
+  const formatBytes = (value) => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes)) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let index = -1;
+    let current = bytes;
+    while (current >= 1024 && index < units.length - 1) {
+      current /= 1024;
+      index += 1;
+    }
+    return `${current.toFixed(current >= 10 ? 0 : 1)} ${units[index]}`;
+  };
+
+  const normalizeNumberSetting = (value, fallback, { min = 1 } = {}) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < min) {
+      return fallback;
+    }
+    return numeric;
+  };
+
+  const resolveSettings = (stored = {}) => {
+    const rootSettings = root.PrometheusFormatterSettings ?? {};
+    const maxPayloadBytes = normalizeNumberSetting(
+      rootSettings.maxPayloadBytes,
+      normalizeNumberSetting(stored.maxPayloadBytes, DEFAULT_MAX_SIZE_BYTES)
+    );
+    const largePayloadBytes = normalizeNumberSetting(
+      rootSettings.largePayloadBytes,
+      normalizeNumberSetting(stored.largePayloadBytes, DEFAULT_LARGE_PAYLOAD_BYTES)
+    );
+    const virtualRowHeight = normalizeNumberSetting(
+      rootSettings.virtualRowHeight,
+      normalizeNumberSetting(stored.virtualRowHeight, DEFAULT_VIRTUAL_ROW_HEIGHT)
+    );
+    const virtualOverscan = normalizeNumberSetting(
+      rootSettings.virtualOverscan,
+      normalizeNumberSetting(stored.virtualOverscan, DEFAULT_VIRTUAL_OVERSCAN, { min: 0 }),
+      { min: 0 }
+    );
+
+    return {
+      maxPayloadBytes,
+      largePayloadBytes: Math.min(largePayloadBytes, maxPayloadBytes),
+      virtualRowHeight,
+      virtualOverscan,
+    };
+  };
+
+  const requestIdle = (callback) => {
+    if (typeof root.requestIdleCallback === 'function') {
+      return root.requestIdleCallback(callback, { timeout: IDLE_TIMEOUT_MS });
+    }
+    return root.setTimeout(() => callback({ timeRemaining: () => 0, didTimeout: true }), 0);
+  };
+
+  const shouldYield = (deadline, startTime) => {
+    if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 4) {
+      return true;
+    }
+    if (!deadline || deadline.didTimeout) {
+      return performance.now() - startTime > CHUNK_TIME_SLICE_MS;
+    }
+    return false;
+  };
+  const getFamilyName = (metricName) => {
+    for (const suffix of FAMILY_SUFFIXES) {
+      if (metricName.endsWith(suffix) && metricName.length > suffix.length) {
+        return metricName.slice(0, -suffix.length);
+      }
+    }
+    return metricName;
+  };
+
+  const normalizeQuery = (query) => {
+    if (!query) return '';
+    return String(query).trim().toLowerCase();
+  };
+
+  const escapeRegExp = (value) => {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  const highlightRawText = (text, query) => {
+    if (!query) return escapeHtml(text);
+    const escapedQuery = escapeRegExp(query);
+    if (!escapedQuery) return escapeHtml(text);
+    const regex = new RegExp(escapedQuery, 'gi');
+    let result = '';
+    let lastIndex = 0;
+    let match = regex.exec(text);
+    while (match) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (start > lastIndex) {
+        result += escapeHtml(text.slice(lastIndex, start));
+      }
+      result += `<mark class="pf-raw-search-hit">${escapeHtml(text.slice(start, end))}</mark>`;
+      lastIndex = end;
+      match = regex.exec(text);
+    }
+    if (lastIndex < text.length) {
+      result += escapeHtml(text.slice(lastIndex));
+    }
+    return result;
+  };
+
+  const isMetaComment = (commentType) => META_COMMENT_TYPES.has(commentType);
+
+  const matchesText = (value, query) => {
+    if (!value) return false;
+    return String(value).toLowerCase().includes(query);
+  };
+
+  const matchesLabelSet = (labels, query) =>
+    Boolean(labels?.some(({ key, value }) => matchesText(key, query) || matchesText(value, query)));
+
+  const matchesMetricEntry = (entry, query) => {
+    if (!query) return false;
+    if (matchesText(entry.name, query) || matchesText(entry.value, query) || matchesText(entry.timestamp, query)) {
+      return true;
+    }
+    if (matchesLabelSet(entry.labels, query)) return true;
+    if (!entry.exemplar) return false;
+    return (
+      matchesText(entry.exemplar.value, query) ||
+      matchesText(entry.exemplar.timestamp, query) ||
+      matchesLabelSet(entry.exemplar.labels, query)
+    );
+  };
+
+  const matchesFamilyMeta = (family, query) => {
+    if (!query) return false;
+    return (
+      matchesText(family.name, query) ||
+      matchesText(family.type, query) ||
+      matchesText(family.unit, query) ||
+      matchesText(family.help, query)
+    );
+  };
+
+  const matchesOrphanEntry = (entry, query) => {
+    if (!query) return true;
+    if (entry.type === 'comment') {
+      return matchesText(entry.raw, query);
+    }
+    if (entry.type === 'warning') {
+      return matchesText(entry.message, query) || matchesText(entry.raw, query);
+    }
+    return false;
+  };
+
+  const createFamilyId = (name, usedIds) => {
+    const base = `pf-family-${name.replace(/[^a-zA-Z0-9_]/g, '-')}`;
+    let id = base;
+    let index = 1;
+    while (usedIds.has(id)) {
+      id = `${base}-${index}`;
+      index += 1;
+    }
+    usedIds.add(id);
+    return id;
+  };
+
+  const formatLabels = (labels, showEmpty) => {
+    if (!labels || labels.length === 0) {
+      return showEmpty ? '<span class="pf-labels">{}</span>' : '';
+    }
+    const labelParts = labels.map(({ key, value }) => {
+      const safeKey = escapeHtml(key);
+      const safeValue = escapeHtml(formatLabelValue(value));
+      return `<span class="pf-label-key">${safeKey}</span>="<span class="pf-label-value">${safeValue}</span>"`;
+    });
+    return `<span class="pf-labels">{${labelParts.join(', ')}}</span>`;
+  };
+
+  const formatExemplar = (exemplar) => {
+    if (!exemplar) return '';
+    const labels = formatLabels(exemplar.labels, true);
+    const exemplarValue = escapeHtml(exemplar.value);
+    const exemplarTimestamp = exemplar.timestamp
+      ? ` <span class="pf-exemplar-timestamp">${escapeHtml(exemplar.timestamp)}</span>`
+      : '';
+    return `${labels} <span class="pf-exemplar-value">${exemplarValue}</span>${exemplarTimestamp}`;
+  };
+
+  const renderMetricEntry = (entry, options = {}) => {
+    const safeName = escapeHtml(entry.name);
+    const labelsHtml = formatLabels(entry.labels, false);
+    const safeValue = escapeHtml(entry.value);
+    const timestampHtml = entry.timestamp
+      ? ` <span class="pf-timestamp">${escapeHtml(entry.timestamp)}</span>`
+      : '';
+    const exemplarHtml = entry.exemplar
+      ? ` <span class="pf-exemplar"># ${formatExemplar(entry.exemplar)}</span>`
+      : '';
+    const highlightClass = options.highlight ? ' pf-search-hit' : '';
+    return `<div class="pf-section${highlightClass}"><span class="pf-metric-name">${safeName}</span>${labelsHtml} <span class="pf-value">${safeValue}</span>${timestampHtml}${exemplarHtml}</div>`;
+  };
+
+  const DEFAULT_SIDEBAR_WIDTH = 300;
+  const MIN_SIDEBAR_WIDTH = 220;
+  const MAX_SIDEBAR_WIDTH = 420;
+  const COLLAPSED_SIDEBAR_WIDTH = 36;
+
+  const clampSidebarWidth = (width) => {
+    if (!Number.isFinite(width)) return DEFAULT_SIDEBAR_WIDTH;
+    return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
+  };
+
+  class VirtualizedList {
+    constructor(container, options = {}) {
+      this.container = container;
+      this.items = [];
+      this.pool = [];
+      this.startIndex = 0;
+      this.endIndex = 0;
+      this.rowHeight = options.rowHeight || DEFAULT_VIRTUAL_ROW_HEIGHT;
+      this.overscan = options.overscan || DEFAULT_VIRTUAL_OVERSCAN;
+      this.renderRow = typeof options.renderRow === 'function' ? options.renderRow : () => {};
+      this.emptyMessage = options.emptyMessage || 'No metrics found.';
+      this.onScroll = this.render.bind(this);
+      this.onResize = () => this.refresh();
+
+      this.container.classList.add('pf-virtualized');
+      this.container.innerHTML = '';
+
+      this.spacer = document.createElement('div');
+      this.spacer.className = 'pf-virtual-spacer';
+
+      this.list = document.createElement('div');
+      this.list.className = 'pf-virtual-list';
+
+      this.emptyState = document.createElement('div');
+      this.emptyState.className = 'pf-empty';
+      this.emptyState.textContent = this.emptyMessage;
+
+      this.container.appendChild(this.spacer);
+      this.container.appendChild(this.list);
+      this.container.appendChild(this.emptyState);
+
+      this.container.addEventListener('scroll', this.onScroll);
+      window.addEventListener('resize', this.onResize);
+    }
+
+    setItems(items = []) {
+      this.items = items;
+      this.refresh(true);
+    }
+
+    refresh(force) {
+      const total = this.items.length;
+      this.spacer.style.height = `${total * this.rowHeight}px`;
+      if (total === 0) {
+        this.list.style.display = 'none';
+        this.spacer.style.display = 'none';
+        this.emptyState.style.display = 'block';
+        return;
+      }
+      this.list.style.display = 'block';
+      this.spacer.style.display = 'block';
+      this.emptyState.style.display = 'none';
+      this.render(force);
+    }
+
+    ensurePool(size) {
+      while (this.pool.length < size) {
+        const row = document.createElement('div');
+        row.className = 'pf-virtual-row';
+        row.style.height = `${this.rowHeight}px`;
+        this.pool.push(row);
+        this.list.appendChild(row);
+      }
+    }
+
+    render(force) {
+      if (!this.container || this.items.length === 0) {
+        return;
+      }
+      const viewportHeight = this.container.clientHeight;
+      if (viewportHeight === 0) {
+        return;
+      }
+      const scrollTop = this.container.scrollTop;
+      const startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.overscan);
+      const endIndex = Math.min(
+        this.items.length,
+        Math.ceil((scrollTop + viewportHeight) / this.rowHeight) + this.overscan
+      );
+      if (!force && startIndex === this.startIndex && endIndex === this.endIndex) {
+        return;
+      }
+      this.startIndex = startIndex;
+      this.endIndex = endIndex;
+
+      const visibleCount = Math.max(0, endIndex - startIndex);
+      this.ensurePool(visibleCount);
+      this.pool.forEach((row) => {
+        row.style.height = `${this.rowHeight}px`;
+      });
+      this.list.style.transform = `translateY(${startIndex * this.rowHeight}px)`;
+
+      for (let i = 0; i < this.pool.length; i += 1) {
+        const row = this.pool[i];
+        const itemIndex = startIndex + i;
+        if (i >= visibleCount) {
+          row.style.display = 'none';
+          continue;
+        }
+        row.style.display = 'flex';
+        if (force || row.dataset.index !== String(itemIndex)) {
+          this.renderRow(row, this.items[itemIndex], itemIndex);
+          row.dataset.index = String(itemIndex);
+        }
+      }
+    }
+  }
+
+  class PrometheusMetricsHandler {
+    constructor(browserAPI) {
+      this.browserAPI = browserAPI;
+      this.groups = [];
+      this.orphans = [];
+      this.familyMetadata = new Map();
+      this.parsedEntries = [];
+      this.flatEntries = [];
+      this.flatVirtualList = null;
+      this.virtualRowHeight = DEFAULT_VIRTUAL_ROW_HEIGHT;
+      this.virtualOverscan = DEFAULT_VIRTUAL_OVERSCAN;
+      this.lastQuery = '';
+      this.flatQuery = '';
+      this.navHandlerAttached = false;
+      this.sidebarHandlerAttached = false;
+      this.resizeHandlerAttached = false;
+      this.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+      this.sidebarCollapsed = false;
+      this.onNavRender = null;
+      this.onSidebarToggle = null;
+    }
+    setVirtualizationOptions(options = {}) {
+      if (Number.isFinite(options.rowHeight) && options.rowHeight > 0) {
+        this.virtualRowHeight = options.rowHeight;
+      }
+      if (Number.isFinite(options.overscan) && options.overscan >= 0) {
+        this.virtualOverscan = options.overscan;
+      }
+      const rootElement = document.documentElement;
+      if (rootElement) {
+        rootElement.style.setProperty('--pf-virtual-row-height', `${this.virtualRowHeight}px`);
+      }
+      if (this.flatVirtualList) {
+        this.flatVirtualList.rowHeight = this.virtualRowHeight;
+        this.flatVirtualList.overscan = this.virtualOverscan;
+        this.flatVirtualList.refresh(true);
+      }
+    }
+
+    setNavRenderHook(callback) {
+      this.onNavRender = typeof callback === 'function' ? callback : null;
+    }
+
+    setSidebarToggleHook(callback) {
+      this.onSidebarToggle = typeof callback === 'function' ? callback : null;
+    }
+
+    collectParsedEntry(parsed) {
+      if (!parsed) return;
+      this.parsedEntries.push(parsed);
+      if (parsed.type === 'comment' && isMetaComment(parsed.commentType)) {
+        const existing = this.familyMetadata.get(parsed.metricName) || {};
+        if (parsed.commentType === 'HELP') {
+          existing.help = parsed.text;
+        } else if (parsed.commentType === 'TYPE') {
+          existing.type = parsed.text;
+        } else if (parsed.commentType === 'UNIT') {
+          existing.unit = parsed.text;
+        }
+        this.familyMetadata.set(parsed.metricName, existing);
+      }
+    }
+
+    buildMetricGroups(options = {}) {
+      this.groups = [];
+      this.orphans = [];
+      this.flatEntries = [];
+      const parsedEntries = this.parsedEntries;
+      const groupsByName = new Map();
+      const usedIds = new Set();
+      const getGroup = (familyName, fallbackName) => {
+        let group = groupsByName.get(familyName);
+        if (group) return group;
+
+        const meta =
+          this.familyMetadata.get(familyName) ||
+          (fallbackName ? this.familyMetadata.get(fallbackName) : null) ||
+          {};
+        group = {
+          name: familyName,
+          id: createFamilyId(familyName, usedIds),
+          type: meta.type || '',
+          unit: meta.unit || '',
+          help: meta.help || '',
+          entries: [],
+        };
+        groupsByName.set(familyName, group);
+        this.groups.push(group);
+        return group;
+      };
+
+      let index = 0;
+      const total = parsedEntries.length;
+      const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+      const onComplete = typeof options.onComplete === 'function' ? options.onComplete : () => {};
+      const streaming = Boolean(options.streaming);
+
+      const processEntry = (parsed) => {
+        const entry = this.createEntry(parsed);
+        if (!entry) return;
+        this.flatEntries.push(entry);
+        if (parsed.type === 'metric') {
+          const familyName = getFamilyName(parsed.name);
+          const group = getGroup(familyName, parsed.name);
+          group.entries.push(entry);
+          return;
+        }
+        if (parsed.type === 'comment') {
+          if (isMetaComment(parsed.commentType)) return;
+          this.orphans.push(entry);
+          return;
+        }
+        if (parsed.type === 'warning') {
+          this.orphans.push(entry);
+        }
+      };
+
+      if (!streaming) {
+        for (index = 0; index < total; index += 1) {
+          processEntry(parsedEntries[index]);
+        }
+        this.parsedEntries = [];
+        onComplete();
+        return;
+      }
+
+      const runChunk = (deadline) => {
+        const startTime = performance.now();
+        while (index < total) {
+          processEntry(parsedEntries[index]);
+          index += 1;
+          if (shouldYield(deadline, startTime)) {
+            break;
+          }
+        }
+        if (onProgress) {
+          onProgress(index, total);
+        }
+        if (index < total) {
+          requestIdle(runChunk);
+        } else {
+          this.parsedEntries = [];
+          onComplete();
+        }
+      };
+
+      requestIdle(runChunk);
+    }
+
+    createEntry(parsed) {
+      if (parsed.type === 'comment') {
+        const raw = parsed.raw || '';
+        return {
+          ...parsed,
+          getHtml: () => `<div class="pf-comment">${escapeHtml(raw)}</div>`,
+        };
+      }
+
+      if (parsed.type === 'warning') {
+        const lineLabel = parsed.lineNumber ? `line ${parsed.lineNumber}` : 'unknown line';
+        const safeMessage = escapeHtml(parsed.message || 'Unknown parse warning');
+        const safeRaw = escapeHtml(parsed.raw || '');
+        return {
+          ...parsed,
+          getHtml: () =>
+            `<div class="pf-warning"><div class="pf-warning-title">Parse warning (${lineLabel}):</div><div>${safeMessage}</div><div class="pf-warning-raw">${safeRaw}</div></div>`,
+        };
+      }
+
+      if (parsed.type === 'metric') {
+        const entry = {
+          ...parsed,
+        };
+        entry.getHtml = (options = {}) => renderMetricEntry(entry, options);
+        return entry;
+      }
+
+      return null;
+    }
+    renderFamilyHtml(family, entriesHtml, options) {
+      const typeLabel = family.type || 'unknown';
+      const helpText = family.help?.trim() ? escapeHtml(family.help) : 'No HELP provided';
+      const unitHtml = family.unit
+        ? `<div class="pf-family-meta-row"><span class="pf-family-unit">unit: ${escapeHtml(family.unit)}</span></div>`
+        : '';
+      const headerClass = options.headerMatch ? ' pf-family-header-hit' : '';
+      const seriesCount = options.seriesCount;
+
+      return `
+        <section class="pf-family" data-family-name="${escapeHtml(family.name)}" id="${family.id}">
+          <div class="pf-family-header${headerClass}">
+            <div class="pf-family-header-content">
+              <div class="pf-family-title-row">
+                <span class="pf-family-name">${escapeHtml(family.name)}</span>
+                <span class="pf-family-pill pf-family-type">type: ${escapeHtml(typeLabel)}</span>
+                <span class="pf-family-pill pf-family-count">series: ${seriesCount}</span>
+                <span class="pf-family-help">${helpText}</span>
+              </div>
+              ${unitHtml}
+            </div>
+          </div>
+          <div class="pf-family-body">
+            ${entriesHtml}
+          </div>
+        </section>
+      `;
+    }
+
+    renderFamilyNavList(navContainer, families, options = {}) {
+      if (!navContainer) return;
+      const hasQuery = Boolean(options.hasQuery);
+      const sidebar = this.getSidebarElement();
+
+      if (navContainer.dataset.initialized !== 'true') {
+        navContainer.innerHTML = `
+          <div class="pf-family-nav-header">
+            <button class="pf-family-nav-toggle" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar">
+              ${SIDEBAR_TOGGLE_SVG}
+            </button>
+            <div class="pf-sidebar-controls"></div>
+          </div>
+          <div class="pf-sidebar-search"></div>
+          <div class="pf-family-nav-empty">No matching families.</div>
+          <ul class="pf-family-nav-list"></ul>
+        `;
+        navContainer.dataset.initialized = 'true';
+      }
+
+      if (!families.length) {
+        navContainer.classList.add('pf-nav-empty');
+        if (sidebar) {
+          if (hasQuery) {
+            sidebar.classList.remove('pf-sidebar-empty');
+          } else {
+            sidebar.classList.add('pf-sidebar-empty');
+          }
+        }
+        const list = navContainer.querySelector('.pf-family-nav-list');
+        if (list) {
+          list.innerHTML = '';
+        }
+        this.updateSidebarToggleButton();
+        this.updateSidebarOffset();
+        return;
+      }
+
+      navContainer.classList.remove('pf-nav-empty');
+      if (sidebar) {
+        sidebar.classList.remove('pf-sidebar-empty');
+      }
+
+      const items = families
+        .map(
+          (family) =>
+            `<li><a href="#${family.id}" data-family-id="${family.id}">${escapeHtml(family.name)}</a></li>`
+        )
+        .join('');
+      const list = navContainer.querySelector('.pf-family-nav-list');
+      if (list) {
+        list.innerHTML = items;
+      }
+      this.updateSidebarToggleButton();
+      this.updateSidebarOffset();
+    }
+
+    attachNavHandlers(navContainer) {
+      if (!navContainer || this.navHandlerAttached) return;
+      navContainer.addEventListener('click', (event) => {
+        const toggleButton = event.target.closest('button[data-action="toggle-sidebar"]');
+        if (toggleButton) {
+          event.preventDefault();
+          this.setSidebarCollapsed(!this.sidebarCollapsed);
+          return;
+        }
+
+        const link = event.target.closest('a[data-family-id]');
+        if (!link) return;
+        event.preventDefault();
+        const targetId = link.dataset.familyId;
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      this.navHandlerAttached = true;
+    }
+
+    getSidebarElement() {
+      return document.getElementById('pf-sidebar');
+    }
+
+    applySidebarStyles() {
+      const sidebar = this.getSidebarElement();
+      if (!sidebar) return;
+      sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
+      sidebar.style.width = this.sidebarCollapsed ? '' : `${this.sidebarWidth}px`;
+    }
+
+    updateSidebarToggleButton() {
+      const navContainer = document.getElementById('pf-family-nav');
+      if (!navContainer) return;
+      const button = navContainer.querySelector('.pf-family-nav-toggle');
+      if (!button) return;
+      if (this.sidebarCollapsed) {
+        button.setAttribute('aria-label', 'Expand sidebar');
+      } else {
+        button.setAttribute('aria-label', 'Collapse sidebar');
+      }
+    }
+
+    updateSidebarOffset() {
+      const rootElement = document.documentElement;
+      if (!rootElement) return;
+      const sidebar = this.getSidebarElement();
+      let width = 0;
+      if (sidebar && !sidebar.classList.contains('pf-sidebar-empty')) {
+        const style = window.getComputedStyle(sidebar);
+        const isHidden = style.display === 'none';
+        if (!isHidden) {
+          width = this.sidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : this.sidebarWidth;
+        }
+      }
+      rootElement.style.setProperty('--pf-sidebar-width', `${width}px`);
+    }
+
+    setSidebarCollapsed(collapsed) {
+      this.sidebarCollapsed = Boolean(collapsed);
+      this.applySidebarStyles();
+      if (this.browserAPI?.storage?.local) {
+        this.browserAPI.storage.local.set({ sidebarCollapsed: this.sidebarCollapsed });
+      }
+      this.updateSidebarToggleButton();
+      this.updateSidebarOffset();
+      if (this.onSidebarToggle) {
+        this.onSidebarToggle();
+      }
+    }
+
+    setSidebarWidth(width, persist) {
+      this.sidebarWidth = clampSidebarWidth(width);
+      this.applySidebarStyles();
+      if (persist && this.browserAPI?.storage?.local) {
+        this.browserAPI.storage.local.set({ sidebarWidth: this.sidebarWidth });
+      }
+      this.updateSidebarOffset();
+    }
+
+    applySidebarPreferences(preferences = {}) {
+      if (typeof preferences.sidebarWidth === 'number') {
+        this.sidebarWidth = clampSidebarWidth(preferences.sidebarWidth);
+      }
+      if (typeof preferences.sidebarCollapsed === 'boolean') {
+        this.sidebarCollapsed = preferences.sidebarCollapsed;
+      }
+      this.applySidebarStyles();
+      this.updateSidebarToggleButton();
+      this.updateSidebarOffset();
+      if (this.onSidebarToggle) {
+        this.onSidebarToggle();
+      }
+    }
+
+    attachSidebarHandlers() {
+      if (this.sidebarHandlerAttached) return;
+      const sidebar = this.getSidebarElement();
+      if (!sidebar) return;
+      const resizer = sidebar.querySelector('.pf-sidebar-resizer');
+      if (!resizer) return;
+
+      const onMouseMove = (event, startX, startWidth) => {
+        const delta = event.clientX - startX;
+        this.setSidebarWidth(startWidth + delta, false);
+      };
+
+      const onMouseDown = (event) => {
+        if (this.sidebarCollapsed) return;
+        const startX = event.clientX;
+        const startWidth = sidebar.getBoundingClientRect().width;
+        document.body.classList.add('pf-resizing');
+
+        const moveHandler = (moveEvent) => onMouseMove(moveEvent, startX, startWidth);
+        const upHandler = () => {
+          document.removeEventListener('mousemove', moveHandler);
+          document.removeEventListener('mouseup', upHandler);
+          document.body.classList.remove('pf-resizing');
+          this.setSidebarWidth(this.sidebarWidth, true);
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+        event.preventDefault();
+      };
+
+      resizer.addEventListener('mousedown', onMouseDown);
+      this.sidebarHandlerAttached = true;
+    }
+
+    attachResizeHandler() {
+      if (this.resizeHandlerAttached) return;
+      const handler = () => {
+        this.updateSidebarOffset();
+        if (this.onSidebarToggle) {
+          this.onSidebarToggle();
+        }
+      };
+      window.addEventListener('resize', handler);
+      this.resizeHandlerAttached = true;
+    }
+
+    /**
+     * Render grouped entries into HTML and insert into the page.
+     * @param {string} query - Current search query.
+     */
+    renderGroupedEntries(query) {
+      this.lastQuery = query;
+      const container = document.getElementById('pf-metrics-container');
+      const navContainer = document.getElementById('pf-family-nav');
+      if (!container || !navContainer) return;
+
+      const normalizedQuery = normalizeQuery(query);
+      const hasQuery = normalizedQuery.length > 0;
+
+      const filteredOrphans = hasQuery
+        ? this.orphans.filter((entry) => matchesOrphanEntry(entry, normalizedQuery))
+        : this.orphans;
+      const familiesForNav = [];
+      const familiesHtml = [];
+
+      this.groups.forEach((family) => {
+        const headerMatch = hasQuery && matchesFamilyMeta(family, normalizedQuery);
+        const matchFlags = hasQuery
+          ? family.entries.map((entry) => matchesMetricEntry(entry, normalizedQuery))
+          : [];
+        const hasSampleMatch = hasQuery && matchFlags.some(Boolean);
+
+        if (hasQuery && !hasSampleMatch && !headerMatch) {
+          return;
+        }
+
+        const entriesHtml = family.entries
+          .map((entry, index) => entry.getHtml({ highlight: hasQuery && matchFlags[index] }))
+          .join('\n');
+
+        familiesHtml.push(
+          this.renderFamilyHtml(family, entriesHtml, {
+            headerMatch,
+            seriesCount: family.entries.length,
+          })
+        );
+        familiesForNav.push({ id: family.id, name: family.name });
+      });
+
+      const sections = [];
+      if (filteredOrphans.length > 0) {
+        const orphanHtml = filteredOrphans.map((entry) => entry.getHtml()).join('\n');
+        sections.push(`<div class="pf-orphans">${orphanHtml}</div>`);
+      }
+      if (familiesHtml.length > 0) {
+        sections.push(`<div class="pf-families">${familiesHtml.join('\n')}</div>`);
+      }
+      if (sections.length === 0) {
+        sections.push('<div class="pf-empty">No matching metrics found.</div>');
+      }
+
+      container.innerHTML = sections.join('\n');
+      this.renderFamilyNavList(navContainer, familiesForNav, { hasQuery });
+      this.attachNavHandlers(navContainer);
+      this.attachSidebarHandlers();
+      this.attachResizeHandler();
+      if (this.onNavRender) {
+        this.onNavRender();
+      }
+    }
+
+    renderFlatEntries(query = '') {
+      this.lastQuery = query;
+      this.flatQuery = normalizeQuery(query);
+      const container = document.getElementById('pf-flat-container');
+      if (!container) return;
+      const hasQuery = this.flatQuery.length > 0;
+      const filteredEntries = hasQuery
+        ? this.flatEntries.filter((entry) => {
+            if (entry.type === 'metric') {
+              return matchesMetricEntry(entry, this.flatQuery);
+            }
+            return matchesOrphanEntry(entry, this.flatQuery);
+          })
+        : this.flatEntries;
+      if (!this.flatVirtualList) {
+        this.flatVirtualList = new VirtualizedList(container, {
+          rowHeight: this.virtualRowHeight,
+          overscan: this.virtualOverscan,
+          renderRow: (row, entry) => {
+            if (!entry) {
+              row.innerHTML = '';
+              return;
+            }
+            const highlight = this.flatQuery.length > 0 && entry.type === 'metric';
+            row.innerHTML = entry.getHtml({ highlight });
+            row.title = entry.raw || entry.message || '';
+          },
+        });
+      }
+      if (this.flatVirtualList.emptyState) {
+        this.flatVirtualList.emptyState.textContent = hasQuery ? 'No matching metrics found.' : 'No metrics found.';
+      }
+      this.flatVirtualList.setItems(filteredEntries);
+    }
+  }
+
+  class PrometheusUIManager {
+    constructor(currentThemeId, browserAPI, handlers = {}) {
+      this.currentThemeId = currentThemeId;
+      this.browserAPI = browserAPI;
+      this.onSearch = typeof handlers.onSearch === 'function' ? handlers.onSearch : () => {};
+      this.onViewModeChange = typeof handlers.onViewModeChange === 'function' ? handlers.onViewModeChange : () => {};
+      this.searchBarVisible = false;
+      this.searchContainer = null;
+      this.searchButton = null;
+      this.themeButton = null;
+      this.themeMenu = null;
+      this.themeMenuOpen = false;
+      this.themeMenuInitialized = false;
+      this.viewMode = 'formatted';
+      this.viewButtons = {
+        formatted: null,
+        flat: null,
+        raw: null,
+      };
+      this.viewToggleInitialized = false;
+    }
+
+    injectCSS() {
+      this.injectBaseCSS();
+      this.applyTheme(this.currentThemeId, { persist: false });
+    }
+
+    injectBaseCSS() {
+      if (document.getElementById(BASE_STYLE_ID)) return;
+      const link = document.createElement('link');
+      link.id = BASE_STYLE_ID;
+      link.rel = 'stylesheet';
+      link.href = this.browserAPI.runtime.getURL(BASE_STYLE_PATH);
+      document.head.appendChild(link);
+    }
+
+    injectThemeCSS(themeId) {
+      const theme = THEME_LOOKUP.get(themeId);
+      if (!theme) return;
+      const href = this.browserAPI.runtime.getURL(theme.file);
+      let link = document.getElementById(THEME_STYLE_ID);
+      if (!link) {
+        link = document.createElement('link');
+        link.id = THEME_STYLE_ID;
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+      }
+      if (link.getAttribute('href') !== href) {
+        link.setAttribute('href', href);
+      }
+      const rootElement = document.documentElement;
+      if (rootElement) {
+        rootElement.setAttribute('data-theme', themeId);
+      }
+    }
+
+    applyTheme(themeId, options = {}) {
+      const resolvedThemeId = resolveThemeId(themeId);
+      this.currentThemeId = resolvedThemeId;
+      this.injectThemeCSS(resolvedThemeId);
+      this.updateThemeMenuSelection();
+      this.updateThemeButtonLabel();
+      const shouldPersist = options.persist !== false;
+      if (shouldPersist && this.browserAPI?.storage?.local) {
+        this.browserAPI.storage.local.set({ theme: resolvedThemeId });
+      }
+    }
+
+    updateThemeButtonLabel() {
+      if (!this.themeButton) return;
+      const theme = THEME_LOOKUP.get(this.currentThemeId);
+      const label = theme ? theme.label : this.currentThemeId;
+      this.themeButton.setAttribute('title', `Theme: ${label}`);
+      this.themeButton.setAttribute('aria-label', `Theme menu (${label})`);
+    }
+
+    updateThemeMenuSelection() {
+      if (!this.themeMenu) return;
+      const options = this.themeMenu.querySelectorAll('.pf-theme-option');
+      options.forEach((option) => {
+        const isActive = option.dataset.themeId === this.currentThemeId;
+        option.classList.toggle('active', isActive);
+        option.setAttribute('aria-pressed', String(isActive));
+      });
+    }
+
+    getTopControlsContainer() {
+      let container = document.getElementById('pf-top-controls');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'pf-top-controls';
+        container.classList.add('pf-top-controls');
+        document.body.appendChild(container);
+      }
+      return container;
+    }
+
+    initializeViewToggleUI() {
+      if (this.viewToggleInitialized) return;
+      const viewContainer = document.createElement('div');
+      viewContainer.id = 'pf-view-controls';
+      viewContainer.classList.add('pf-view-controls');
+
+      const viewToggle = document.createElement('div');
+      viewToggle.classList.add('pf-view-toggle');
+
+      const formattedButton = document.createElement('button');
+      formattedButton.type = 'button';
+      formattedButton.classList.add('pf-toggle-button');
+      formattedButton.textContent = 'Formatted';
+      formattedButton.addEventListener('click', () => this.setViewMode('formatted'));
+
+      const rawButton = document.createElement('button');
+      rawButton.type = 'button';
+      rawButton.classList.add('pf-toggle-button');
+      rawButton.textContent = 'Raw';
+      rawButton.addEventListener('click', () => this.setViewMode('raw'));
+
+      const flatButton = document.createElement('button');
+      flatButton.type = 'button';
+      flatButton.classList.add('pf-toggle-button');
+      flatButton.textContent = 'Flat';
+      flatButton.addEventListener('click', () => this.setViewMode('flat'));
+
+      viewToggle.appendChild(formattedButton);
+      viewToggle.appendChild(flatButton);
+      viewToggle.appendChild(rawButton);
+      viewContainer.appendChild(viewToggle);
+      const topControls = this.getTopControlsContainer();
+      const themeControls = document.getElementById('pf-theme-controls');
+      if (themeControls && themeControls.parentElement === topControls) {
+        topControls.insertBefore(viewContainer, themeControls);
+      } else {
+        topControls.appendChild(viewContainer);
+      }
+
+      this.viewButtons.formatted = formattedButton;
+      this.viewButtons.flat = flatButton;
+      this.viewButtons.raw = rawButton;
+      this.viewToggleInitialized = true;
+      this.updateViewToggleButtons();
+    }
+
+    setViewMode(mode, options = {}) {
+      const nextMode = mode === 'raw' ? 'raw' : mode === 'flat' ? 'flat' : 'formatted';
+      this.viewMode = nextMode;
+      const root = document.getElementById('pf-root');
+      if (root) {
+        root.classList.toggle('pf-view-raw', nextMode === 'raw');
+        root.classList.toggle('pf-view-flat', nextMode === 'flat');
+      }
+      this.updateViewToggleButtons();
+      this.mountSearchControls();
+      this.mountSearchBar();
+      const shouldPersist = options.persist !== false;
+      if (shouldPersist && this.browserAPI?.storage?.local) {
+        this.browserAPI.storage.local.set({ viewMode: nextMode });
+      }
+      this.onViewModeChange(nextMode);
+    }
+
+    updateViewToggleButtons() {
+      const isRaw = this.viewMode === 'raw';
+      const isFlat = this.viewMode === 'flat';
+      if (this.viewButtons.formatted) {
+        const isActive = !isRaw && !isFlat;
+        this.viewButtons.formatted.classList.toggle('active', isActive);
+        this.viewButtons.formatted.setAttribute('aria-pressed', String(isActive));
+      }
+      if (this.viewButtons.flat) {
+        this.viewButtons.flat.classList.toggle('active', isFlat);
+        this.viewButtons.flat.setAttribute('aria-pressed', String(isFlat));
+      }
+      if (this.viewButtons.raw) {
+        this.viewButtons.raw.classList.toggle('active', isRaw);
+        this.viewButtons.raw.setAttribute('aria-pressed', String(isRaw));
+      }
+    }
+
+    initializeSearchUI() {
+      const searchContainer = document.createElement('div');
+      searchContainer.classList.add('pf-search-container');
+      this.searchContainer = searchContainer;
+
+      const searchField = document.createElement('div');
+      searchField.classList.add('pf-search-field');
+
+      const searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.id = 'pf-search-input';
+      searchInput.placeholder = 'Search metrics...';
+
+      const clearButton = document.createElement('button');
+      clearButton.type = 'button';
+      clearButton.classList.add('pf-search-clear');
+      clearButton.setAttribute('aria-label', 'Clear search');
+      clearButton.innerHTML = CLEAR_ICON_SVG;
+
+      searchInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        this.onSearch(value, this.viewMode);
+        searchContainer.classList.toggle('has-value', value.length > 0);
+      });
+
+      clearButton.addEventListener('click', () => {
+        searchInput.value = '';
+        searchContainer.classList.remove('has-value');
+        this.onSearch('', this.viewMode);
+        searchInput.focus();
+      });
+
+      searchField.appendChild(searchInput);
+      searchField.appendChild(clearButton);
+      searchContainer.appendChild(searchField);
+
+      this.ensureSearchButton();
+      this.mountThemeControls();
+    }
+
+    ensureSearchButton() {
+      if (this.searchButton) {
+        return;
+      }
+
+      const searchButton = document.createElement('button');
+      searchButton.id = 'pf-filter-icon';
+      searchButton.type = 'button';
+      searchButton.classList.add('pf-icon-button');
+      searchButton.setAttribute('aria-label', 'Search metrics');
+      searchButton.innerHTML = SEARCH_ICON_SVG;
+      searchButton.addEventListener('click', () => {
+        this.toggleSearchBar();
+      });
+
+      this.searchButton = searchButton;
+    }
+
+    ensureThemeButton() {
+      if (this.themeButton) {
+        return this.themeButton;
+      }
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.classList.add('pf-theme-button');
+      button.setAttribute('aria-haspopup', 'menu');
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-controls', 'pf-theme-menu');
+      const icon = document.createElement('img');
+      icon.src = this.browserAPI.runtime.getURL('images/theme-selector.png');
+      icon.alt = '';
+      icon.classList.add('pf-theme-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      button.appendChild(icon);
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.toggleThemeMenu();
+      });
+      this.themeButton = button;
+      this.updateThemeButtonLabel();
+      return button;
+    }
+
+    ensureThemeMenu() {
+      if (this.themeMenu) {
+        return this.themeMenu;
+      }
+      const menu = document.createElement('div');
+      menu.id = 'pf-theme-menu';
+      menu.classList.add('pf-theme-menu');
+      menu.setAttribute('role', 'menu');
+      menu.setAttribute('aria-hidden', 'true');
+
+      THEME_GROUPS.forEach((group) => {
+        const groupEl = document.createElement('div');
+        groupEl.classList.add('pf-theme-group');
+        const label = document.createElement('div');
+        label.classList.add('pf-theme-group-label');
+        label.textContent = group.label;
+        groupEl.appendChild(label);
+
+        THEME_DEFINITIONS.filter((theme) => theme.mode === group.mode).forEach((theme) => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.classList.add('pf-theme-option');
+          option.dataset.themeId = theme.id;
+          option.setAttribute('role', 'menuitem');
+          option.textContent = theme.label;
+          option.addEventListener('click', () => {
+            this.switchTheme(theme.id);
+            this.closeThemeMenu();
+          });
+          groupEl.appendChild(option);
+        });
+
+        menu.appendChild(groupEl);
+      });
+
+      this.themeMenu = menu;
+      this.updateThemeMenuSelection();
+      return menu;
+    }
+
+    resolveSearchButtonContainer() {
+      if (this.viewMode === 'raw' || this.viewMode === 'flat') {
+        return this.getTopControlsContainer();
+      }
+      const sidebar = document.getElementById('pf-sidebar');
+      if (!sidebar) return null;
+      const style = window.getComputedStyle(sidebar);
+      if (style.display === 'none') {
+        return this.getTopControlsContainer();
+      }
+      return document.querySelector('.pf-sidebar-controls');
+    }
+
+    mountSearchControls() {
+      this.ensureSearchButton();
+      if (!this.searchButton) return;
+      const container = this.resolveSearchButtonContainer();
+      if (!container) {
+        if (this.searchButton.parentElement) {
+          this.searchButton.parentElement.removeChild(this.searchButton);
+        }
+        return;
+      }
+      if (container.id === 'pf-top-controls') {
+        const themeControls = document.getElementById('pf-theme-controls');
+        if (themeControls && themeControls.parentElement === container) {
+          container.insertBefore(this.searchButton, themeControls);
+          return;
+        }
+      }
+      if (this.searchButton.parentElement !== container) {
+        container.appendChild(this.searchButton);
+      }
+    }
+
+    shouldUseMainSearch() {
+      const sidebar = document.getElementById('pf-sidebar');
+      if (!sidebar) return true;
+      const style = window.getComputedStyle(sidebar);
+      if (style.display === 'none') return true;
+      return sidebar.classList.contains('collapsed');
+    }
+
+    mountSearchBar() {
+      if (!this.searchContainer) return;
+      const useMainSearch = this.shouldUseMainSearch();
+      const container = useMainSearch
+        ? document.getElementById('pf-main-search')
+        : document.querySelector('.pf-sidebar-search');
+      if (!container) return;
+      if (this.searchContainer.parentElement !== container) {
+        container.appendChild(this.searchContainer);
+      }
+      this.searchContainer.classList.toggle('pf-search-in-main', useMainSearch);
+      this.searchContainer.classList.toggle('pf-search-in-sidebar', !useMainSearch);
+    }
+
+    mountThemeControls() {
+      const topControls = this.getTopControlsContainer();
+      let container = document.getElementById('pf-theme-controls');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'pf-theme-controls';
+        container.classList.add('pf-theme-controls');
+      }
+      if (container.parentElement !== topControls) {
+        topControls.appendChild(container);
+      }
+      const button = this.ensureThemeButton();
+      const menu = this.ensureThemeMenu();
+      if (button.parentElement !== container) {
+        container.appendChild(button);
+      }
+      if (menu.parentElement !== container) {
+        container.appendChild(menu);
+      }
+      this.registerThemeMenuHandlers();
+    }
+
+    /**
+     * Switch to the selected theme.
+     * @param {string} newTheme - The theme id to apply.
+     */
+    switchTheme(newTheme) {
+      this.applyTheme(newTheme);
+    }
+
+    registerThemeMenuHandlers() {
+      if (this.themeMenuInitialized) return;
+      this.themeMenuInitialized = true;
+      document.addEventListener('click', (event) => {
+        if (!this.themeMenuOpen) return;
+        const container = document.getElementById('pf-theme-controls');
+        if (container && !container.contains(event.target)) {
+          this.closeThemeMenu();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (!this.themeMenuOpen) return;
+        if (event.key === 'Escape') {
+          this.closeThemeMenu();
+          if (this.themeButton) {
+            this.themeButton.focus();
+          }
+        }
+      });
+    }
+
+    setThemeMenuOpen(isOpen) {
+      if (!this.themeMenu || !this.themeButton) return;
+      this.themeMenuOpen = isOpen;
+      this.themeMenu.classList.toggle('open', isOpen);
+      this.themeMenu.setAttribute('aria-hidden', String(!isOpen));
+      this.themeButton.setAttribute('aria-expanded', String(isOpen));
+    }
+
+    toggleThemeMenu() {
+      this.setThemeMenuOpen(!this.themeMenuOpen);
+    }
+
+    openThemeMenu() {
+      this.setThemeMenuOpen(true);
+    }
+
+    closeThemeMenu() {
+      this.setThemeMenuOpen(false);
+    }
+
+    setSearchBarVisible(visible) {
+      if (!this.searchContainer) return;
+      this.searchBarVisible = visible;
+      const searchContainer = this.searchContainer;
+      if (!visible) {
+        searchContainer.classList.remove('active', 'has-value');
+        return;
+      }
+      searchContainer.classList.add('active');
+      const searchInput = searchContainer.querySelector('#pf-search-input');
+      if (searchInput) {
+        searchContainer.classList.toggle('has-value', searchInput.value.length > 0);
+        searchInput.focus();
+      }
+    }
+
+    /**
+     * Toggle the visibility of the search bar.
+     */
+    toggleSearchBar() {
+      if (!this.searchContainer) return;
+      this.mountSearchBar();
+      this.setSearchBarVisible(!this.searchBarVisible);
+    }
+  }
+
+  const showSizeWarning = (contentSize, maxSize) => {
+    if (document.getElementById('pf-size-warning')) return;
+    const warning = document.createElement('div');
+    warning.id = 'pf-size-warning';
+    warning.textContent = `Prometheus Formatter skipped: payload ${formatBytes(contentSize)} exceeds limit ${formatBytes(
+      maxSize
+    )}. Adjust maxPayloadBytes to increase this limit.`;
+    warning.style.cssText = SIZE_WARNING_STYLE;
+    document.body.prepend(warning);
+  };
+
+  const parsePrometheusTextInChunks = (rawText, metricsHandler, options = {}) => {
+    const totalLength = rawText.length;
+    let index = 0;
+    let lineNumber = 0;
+    const onComplete = typeof options.onComplete === 'function' ? options.onComplete : () => {};
+
+    const runChunk = (deadline) => {
+      const startTime = performance.now();
+      while (index < totalLength) {
+        const nextNewline = rawText.indexOf('\n', index);
+        let line = '';
+        if (nextNewline === -1) {
+          line = rawText.slice(index);
+          index = totalLength;
+        } else {
+          line = rawText.slice(index, nextNewline);
+          index = nextNewline + 1;
+        }
+        lineNumber += 1;
+        const parsed = parsePrometheusLine(line, lineNumber);
+        if (parsed) {
+          metricsHandler.collectParsedEntry(parsed);
+        }
+        if (shouldYield(deadline, startTime)) {
+          break;
+        }
+      }
+      if (index < totalLength) {
+        requestIdle(runChunk);
+      } else {
+        onComplete();
+      }
+    };
+
+    requestIdle(runChunk);
+  };
+
+  /**
+   * Determines if the page contains Prometheus metrics.
+   * @returns {boolean} - True if the page is a Prometheus metrics endpoint.
+   */
+  const isPrometheusEndpoint = () => {
+    const contentType = (document.contentType || '').toLowerCase();
+    if (contentType.includes('application/openmetrics-text')) {
+      return true;
+    }
+
+    if (!contentType.startsWith('text/plain') && contentType !== '') {
+      return false;
+    }
+
+    const rawText = document.body.textContent || '';
+    const bodyText = rawText.trim();
+    if (!bodyText) return false;
+    const lines = bodyText.slice(0, SAMPLE_SIZE_LIMIT).split('\n');
+    let metricLines = 0;
+    let metadataLines = 0;
+    let inspected = 0;
+
+    for (const rawLine of lines) {
+      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+      if (!line.trim()) continue;
+      inspected += 1;
+      const classification = classifyPrometheusLine(line);
+      if (classification?.type === 'metric') {
+        metricLines += 1;
+      } else if (classification?.type === 'comment' && classification.commentType !== 'COMMENT') {
+        metadataLines += 1;
+      }
+      if (inspected >= MAX_INSPECTED_LINES) {
+        break;
+      }
+    }
+
+    if (metricLines === 0) return false;
+    const metricRatio = metricLines / Math.max(1, inspected);
+    const hasMetadata = metadataLines > 0;
+    const isMetricDense = metricRatio > 0.5 && metricLines >= 3;
+    return hasMetadata || isMetricDense;
+  };
+
+  const formatPageIfPrometheusEndpoint = () => {
+    if (!isPrometheusEndpoint()) return;
+
+    if (document.getElementById('pf-root')) return;
+
+    const rawText = document.body.textContent || '';
+    const bodyText = rawText.trim();
+    if (!bodyText) return;
+
+    const contentSize = new Blob([rawText]).size;
+    const rootElement = document.documentElement;
+    const previousVisibility = rootElement ? rootElement.style.visibility : '';
+    const restoreVisibility = () => {
+      if (rootElement) {
+        rootElement.style.visibility = previousVisibility;
+      }
+    };
+    if (rootElement) {
+      rootElement.style.visibility = 'hidden';
+    }
+
+    const applyPreferences = (result = {}) => {
+      const settings = resolveSettings(result);
+      if (contentSize > settings.maxPayloadBytes) {
+        restoreVisibility();
+        showSizeWarning(contentSize, settings.maxPayloadBytes);
+        return;
+      }
+
+      const container = document.createElement('div');
+      container.id = 'pf-root';
+
+      const contentContainer = document.createElement('div');
+      contentContainer.classList.add('pf-container', 'pf-content');
+
+      const layout = document.createElement('div');
+      layout.classList.add('pf-layout');
+
+      const sidebar = document.createElement('div');
+      sidebar.id = 'pf-sidebar';
+      sidebar.classList.add('pf-sidebar');
+
+      const navContainer = document.createElement('div');
+      navContainer.id = 'pf-family-nav';
+
+      const resizer = document.createElement('div');
+      resizer.classList.add('pf-sidebar-resizer');
+
+      const main = document.createElement('div');
+      main.classList.add('pf-main');
+
+      const mainSearch = document.createElement('div');
+      mainSearch.id = 'pf-main-search';
+      mainSearch.classList.add('pf-main-search');
+
+      const metricsContainer = document.createElement('div');
+      metricsContainer.id = 'pf-metrics-container';
+
+      const flatContainer = document.createElement('div');
+      flatContainer.id = 'pf-flat-container';
+
+      const rawContainer = document.createElement('pre');
+      rawContainer.id = 'pf-raw-container';
+      rawContainer.classList.add('pf-raw-container');
+      rawContainer.dataset.loaded = 'false';
+
+      sidebar.appendChild(navContainer);
+      sidebar.appendChild(resizer);
+      layout.appendChild(sidebar);
+      main.appendChild(mainSearch);
+      main.appendChild(metricsContainer);
+      main.appendChild(flatContainer);
+      main.appendChild(rawContainer);
+      layout.appendChild(main);
+      contentContainer.appendChild(layout);
+      container.appendChild(contentContainer);
+      document.body.replaceChildren(container);
+
+      const currentTheme = resolveThemeId(result.theme);
+
+      const metricsHandler = new PrometheusMetricsHandler(browserAPI);
+      metricsHandler.setVirtualizationOptions({
+        rowHeight: settings.virtualRowHeight,
+        overscan: settings.virtualOverscan,
+      });
+      metricsHandler.applySidebarPreferences({
+        sidebarWidth: result.sidebarWidth,
+        sidebarCollapsed: result.sidebarCollapsed,
+      });
+
+      const ensureRawContent = (force = false) => {
+        if (!force && rawContainer.dataset.loaded === 'true') return;
+        rawContainer.textContent = rawText;
+        rawContainer.dataset.loaded = 'true';
+      };
+
+      const updateRawSearch = (query) => {
+        const normalizedQuery = normalizeQuery(query);
+        if (!normalizedQuery) {
+          ensureRawContent(true);
+          return;
+        }
+        rawContainer.innerHTML = highlightRawText(rawText, normalizedQuery);
+        rawContainer.dataset.loaded = 'true';
+      };
+
+      let parseReady = false;
+
+      const uiManager = new PrometheusUIManager(currentTheme, browserAPI, {
+        onSearch: (query, viewMode) => {
+          if (viewMode === 'raw') {
+            metricsHandler.lastQuery = query;
+            updateRawSearch(query);
+            return;
+          }
+          if (!parseReady) return;
+          if (viewMode === 'flat') {
+            metricsHandler.renderFlatEntries(query);
+            return;
+          }
+          metricsHandler.renderGroupedEntries(query);
+        },
+        onViewModeChange: (mode) => {
+          if (mode === 'raw') {
+            updateRawSearch(metricsHandler.lastQuery || '');
+            return;
+          }
+          if (!parseReady) return;
+          if (mode === 'flat') {
+            metricsHandler.renderFlatEntries(metricsHandler.lastQuery || '');
+            return;
+          }
+          metricsHandler.renderGroupedEntries(metricsHandler.lastQuery || '');
+        },
+      });
+
+      uiManager.injectCSS();
+      restoreVisibility();
+      uiManager.initializeViewToggleUI();
+      uiManager.initializeSearchUI();
+      metricsHandler.setNavRenderHook(() => {
+        uiManager.mountSearchControls();
+        uiManager.mountSearchBar();
+      });
+      metricsHandler.setSidebarToggleHook(() => {
+        uiManager.mountSearchControls();
+        uiManager.mountSearchBar();
+      });
+
+      const finalizeRender = () => {
+        parseReady = true;
+        const storedViewMode = result.viewMode || 'formatted';
+        const preferFlat = contentSize >= settings.largePayloadBytes && (!result.viewMode || storedViewMode === 'formatted');
+        const userSelectedMode = uiManager.viewMode;
+        const hasUserSelected = userSelectedMode !== 'formatted';
+        const defaultViewMode = preferFlat ? 'flat' : storedViewMode;
+        const initialViewMode = hasUserSelected ? userSelectedMode : defaultViewMode;
+        uiManager.setViewMode(initialViewMode, { persist: !preferFlat && !hasUserSelected });
+
+        uiManager.mountSearchControls();
+        uiManager.mountSearchBar();
+      };
+
+      parsePrometheusTextInChunks(rawText, metricsHandler, {
+        onComplete: () => {
+          metricsHandler.buildMetricGroups({
+            streaming: true,
+            onComplete: finalizeRender,
+          });
+        },
+      });
+    };
+
+    if (browserAPI?.storage?.local) {
+      browserAPI.storage.local.get(
+        [
+          'theme',
+          'sidebarWidth',
+          'sidebarCollapsed',
+          'viewMode',
+          'maxPayloadBytes',
+          'largePayloadBytes',
+          'virtualRowHeight',
+          'virtualOverscan',
+        ],
+        applyPreferences
+      );
+    } else {
+      applyPreferences({});
+    }
+  };
+
+  if (document.readyState !== 'loading') {
+    formatPageIfPrometheusEndpoint();
+  } else {
+    const listener = () => {
+      formatPageIfPrometheusEndpoint();
+      document.removeEventListener('DOMContentLoaded', listener);
+    };
+    document.addEventListener('DOMContentLoaded', listener);
+  }
+})();
