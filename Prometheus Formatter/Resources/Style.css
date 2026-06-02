@@ -12,6 +12,17 @@
 	--secondary-color: #FF5722;
 	--background-color: #f0f0f0;
 	--text-color: #333;
+	--button-background: #ffffff;
+	--button-background-hover: #f7f7f9;
+	--button-border: rgba(0, 0, 0, 0.16);
+	--button-shadow: rgba(0, 0, 0, 0.08);
+	--preferences-accent: #2563eb;
+	--preferences-border-hover: rgba(37, 99, 235, 0.38);
+	--preferences-focus: rgba(37, 99, 235, 0.28);
+	--review-accent: #d97706;
+	--review-border-hover: rgba(217, 119, 6, 0.4);
+	--review-focus: rgba(217, 119, 6, 0.28);
+	--review-icon-fill: rgba(217, 119, 6, 0.18);
 }
 
 html {
@@ -36,6 +47,11 @@ body {
 	transition: background-color 0.3s, color 0.3s;
 }
 
+p {
+	max-width: 420px;
+	margin: 0;
+}
+
 body:not(.state-on, .state-off) :is(.state-on, .state-off) {
 	display: none;
 }
@@ -45,8 +61,73 @@ body.state-off :is(.state-on, .state-unknown) {
 	display: none;
 }
 
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 10px;
+}
+
 button {
-	font-size: 1em;
+	--button-accent: var(--preferences-accent);
+	--button-border-hover: var(--preferences-border-hover);
+	--button-focus: var(--preferences-focus);
+	--button-icon-fill: transparent;
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 36px;
+	min-width: 182px;
+	max-width: 100%;
+	padding: 7px 13px;
+	border: 1px solid var(--button-border);
+	border-radius: 7px;
+	font: -apple-system-body;
+	color: var(--text-color);
+	background: var(--button-background);
+	box-shadow: 0 1px 2px var(--button-shadow);
+	transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+button:hover {
+	background: var(--button-background-hover);
+	border-color: var(--button-border-hover);
+}
+
+button:active {
+	transform: translateY(1px);
+	box-shadow: 0 1px 1px var(--button-shadow);
+}
+
+button:focus-visible {
+	outline: 3px solid var(--button-focus);
+	outline-offset: 2px;
+}
+
+.open-review-page {
+	--button-accent: var(--review-accent);
+	--button-border-hover: var(--review-border-hover);
+	--button-focus: var(--review-focus);
+	--button-icon-fill: var(--review-icon-fill);
+}
+
+.button-icon {
+	flex: 0 0 auto;
+	width: 17px;
+	height: 17px;
+	color: var(--button-accent);
+	fill: var(--button-icon-fill);
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.button-label {
+	overflow-wrap: anywhere;
+	line-height: 1.2;
 }
 
 img {
@@ -69,5 +150,16 @@ img {
 	:root {
 		--background-color: #1e1e1e;
 		--text-color: #f5f5f5;
+		--button-background: #2b2b2f;
+		--button-background-hover: #34343a;
+		--button-border: rgba(255, 255, 255, 0.16);
+		--button-shadow: rgba(0, 0, 0, 0.35);
+		--preferences-accent: #7aa7ff;
+		--preferences-border-hover: rgba(122, 167, 255, 0.44);
+		--preferences-focus: rgba(122, 167, 255, 0.32);
+		--review-accent: #f6b44b;
+		--review-border-hover: rgba(246, 180, 75, 0.44);
+		--review-focus: rgba(246, 180, 75, 0.3);
+		--review-icon-fill: rgba(246, 180, 75, 0.2);
 	}
 }
